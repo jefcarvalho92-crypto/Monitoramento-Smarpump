@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SCADA Recalque • Acesso Remoto</title>
+<style>
+  :root {
+    --bg: #070b12; --panel: #0f1622; --border: #233044;
+    --text: #f1f5f9; --muted: #8b9bb4;
+    --green: #10b981; --red: #ef4444; --cyan: #06b6d4; --amber: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+  body { background: radial-gradient(circle at top, #111b2e 0%, #05080f 100%); color: var(--text); padding: 12px; max-width: 1180px; margin: auto; min-height: 100vh; }
+  .card { background: linear-gradient(180deg, #131c2c 0%, #0c121d 100%); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; box-shadow: 0 12px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06); }
+  .topbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid #1e293b; padding-bottom: 12px; margin-bottom: 14px; }
+  .brand h1 { font-size: 19px; font-weight: 800; letter-spacing: 0.6px; color: #fff; text-transform: uppercase; }
+  .brand p { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: monospace; }
+  .status-pills { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .pill { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; border: 1px solid #2a3950; background: #0a0f18; color: var(--muted); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .pill.ok { background: rgba(16,185,129,0.12); color: #34d399; border-color: #059669; box-shadow: 0 0 12px rgba(16,185,129,0.25); }
+  .pill.err { background: rgba(239,68,68,0.16); color: #f87171; border-color: #dc2626; box-shadow: 0 0 12px rgba(239,68,68,0.3); }
+  .pill.ota { background: linear-gradient(180deg, #0284c7 0%, #0369a1 100%); color: #fff; border-color: #38bdf8; }
+  .led { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+  .kpi-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .kpi-box { background: #070b13; border: 1px solid #1b2638; border-radius: 8px; padding: 10px 14px; box-shadow: inset 0 2px 8px rgba(0,0,0,0.6); }
+  .kpi-box span { font-size: 10px; color: var(--muted); text-transform: uppercase; font-weight: 700; display: block; }
+  .kpi-box strong { font-size: 18px; color: #38bdf8; font-weight: 800; margin-top: 2px; display: block; }
+  .scada-stage { background: #060a11; border: 1px solid #1c283b; border-radius: 12px; padding: 14px; overflow-x: auto; box-shadow: inset 0 0 30px rgba(0,0,0,0.9); }
+  .scada-svg { width: 100%; min-width: 760px; height: auto; display: block; }
+  @keyframes flowAnim { to { stroke-dashoffset: -24; } }
+  .pipe-flow { stroke-dasharray: 12 12; animation: flowAnim 0.6s linear infinite; }
+  @keyframes impellerSpin { 100% { transform: rotate(360deg); } }
+  .spin-b1 { animation: impellerSpin 0.45s linear infinite; transform-origin: 390px 115px; }
+  .spin-b2 { animation: impellerSpin 0.45s linear infinite; transform-origin: 390px 265px; }
+  .pumps-telemetry { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  @media(max-width:768px){ .pumps-telemetry { grid-template-columns: 1fr; } .kpi-bar { grid-template-columns: repeat(2,1fr); } }
+  .motor-panel { background: #090e17; border: 1px solid #1f2d42; border-radius: 10px; padding: 12px 16px; transition: 0.3s; }
+  .motor-panel.active { border-color: #10b981; box-shadow: 0 0 18px rgba(16,185,129,0.18); }
+  .motor-panel.fault { border-color: #ef4444; box-shadow: 0 0 18px rgba(239,68,68,0.25); }
+  .mp-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #172233; padding-bottom: 6px; }
+  .mp-title { font-size: 15px; font-weight: 800; color: #fff; }
+  .mp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+  .mp-stat { background: #05080e; padding: 6px; border-radius: 6px; border: 1px solid #151f30; }
+  .mp-stat small { font-size: 10px; color: var(--muted); display: block; }
+  .mp-stat b { font-size: 14px; color: #e2e8f0; font-family: monospace; }
+  .sec-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .btn-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  @media(max-width:768px){ .btn-row { grid-template-columns: 1fr 1fr; } }
+  button { padding: 12px 10px; border-radius: 8px; border: 1px solid #2b3b52; background: linear-gradient(180deg, #1c283b 0%, #111827 100%); color: #e2e8f0; font-weight: 800; font-size: 12px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08); transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.4px; }
+  button:active { transform: translateY(2px); }
+  button.sel-blue { background: linear-gradient(180deg, #0284c7 0%, #0369a1 100%); border-color: #38bdf8; color: #fff; box-shadow: 0 0 14px rgba(14,165,233,0.45); }
+  button.sel-amber { background: linear-gradient(180deg, #d97706 0%, #b45309 100%); border-color: #fbbf24; color: #fff; }
+  button.btn-start { background: linear-gradient(180deg, #059669 0%, #047857 100%); border-color: #34d399; color: #fff; }
+  button.btn-stop { background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%); border-color: #f87171; color: #fff; }
+  .alarm-row { display: flex; justify-content: space-between; padding: 9px 12px; border-radius: 7px; margin-bottom: 6px; font-size: 12px; font-weight: 700; }
+  .al-ok { background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.22); color: #34d399; }
+  .al-err { background: rgba(239,68,68,0.16); border: 1px solid rgba(239,68,68,0.45); color: #fca5a5; }
+  .lb { display:block; font-size:11px; color: var(--muted); margin-top:10px; font-weight:700; text-transform:uppercase; }
+  .in { width:100%; padding:11px; margin-top:4px; background:#05080e; color:#fff; border:1px solid #233044; border-radius:8px; font-size:14px; }
+  #stale { display:none; background:rgba(245,158,11,0.15); border:1px solid #f59e0b; color:#fbbf24; padding:8px 12px; border-radius:8px; font-size:12px; font-weight:700; margin-bottom:12px; }
+</style>
+</head>
+<body>
+<div id="login" class="card" style="max-width:420px;margin:40px auto;">
+  <h1 style="font-size:18px;margin-bottom:6px;">SCADA Recalque • Acesso Remoto</h1>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">Use os dados do seu broker MQTT (EMQX Cloud). Ficam salvos só neste aparelho.</p>
+  <label class="lb">Servidor (URL do cluster)</label><input id="f-host" class="in" placeholder="xxxxxxxx.ala.us-east-1.emqxsl.com" autocapitalize="off" autocorrect="off">
+  <label class="lb">Porta WebSocket (wss)</label><input id="f-port" class="in" type="number" value="8084">
+  <label class="lb">Usuário</label><input id="f-user" class="in" autocapitalize="off" autocorrect="off">
+  <label class="lb">Senha</label><input id="f-pass" class="in" type="password">
+  <label class="lb">Tópico base (aparece na página /mqtt da placa)</label><input id="f-base" class="in" placeholder="recalque/A1B2C3" autocapitalize="off" autocorrect="off">
+  <button class="btn-start" style="width:100%;margin-top:16px;" onclick="entrar()">Conectar</button>
+  <p id="login-msg" style="font-size:12px;color:#f87171;margin-top:10px;min-height:16px;"></p>
+</div>
+<div id="dash" style="display:none;">
+<div class="card">
+  <div class="topbar">
+    <div class="brand">
+      <h1>SCADA Recalque Industrial • V7 HD</h1>
+      <p id="sub-info">Aguardando dados da placa...</p>
+    </div>
+    <div class="status-pills">
+      <span class="pill" id="bdg-nuvem"><span class="led"></span>NUVEM --</span>
+      <span class="pill" id="bdg-485"><span class="led"></span>RS485</span>
+      <span class="pill" id="bdg-boia"><span class="led"></span>BOIA DIRETA</span>
+      <span class="pill" id="bdg-placa"><span class="led"></span>PLACA --</span>
+      <a href="#" class="pill ota" onclick="sair();return false;">⎋ SAIR</a>
+    </div>
+  </div>
+  <div id="stale">⚠ Sem dados novos da placa — verifique se ela está ligada e com internet.</div>
+  <div class="kpi-bar">
+    <div class="kpi-box"><span>Demanda Sistema</span><strong id="k-dem">--</strong></div>
+    <div class="kpi-box"><span>Bomba em Operação</span><strong id="k-bat">--</strong></div>
+    <div class="kpi-box"><span>Próxima Sequência</span><strong id="k-prox">--</strong></div>
+    <div class="kpi-box"><span>Modo Selecionado</span><strong id="k-modo">--</strong></div>
+  </div>
+  <div class="scada-stage">
+    <svg class="scada-svg" viewBox="0 0 820 350">
+      <defs>
+        <linearGradient id="tankShell" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#1e293b"/>
+          <stop offset="25%" stop-color="#334155"/>
+          <stop offset="50%" stop-color="#1e293b"/>
+          <stop offset="100%" stop-color="#0f172a"/>
+        </linearGradient>
+        <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#0284c7" stop-opacity="0.95"/>
+        </linearGradient>
+        <clipPath id="clipInf"><rect x="36" y="75" width="138" height="210" rx="8"/></clipPath>
+        <clipPath id="clipSup"><rect x="646" y="55" width="138" height="210" rx="8"/></clipPath>
+      </defs>
+      <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#111a29" stroke-width="1"/>
+      </pattern>
+      <rect width="820" height="350" fill="url(#grid)"/>
+      <path d="M 174 255 L 245 255 L 245 115 L 350 115" fill="none" stroke="#334155" stroke-width="14" stroke-linejoin="round"/>
+      <path d="M 245 255 L 245 265 L 350 265" fill="none" stroke="#334155" stroke-width="14" stroke-linejoin="round"/>
+      <path id="flow-suc1" d="M 174 255 L 245 255 L 245 115 L 350 115" fill="none" stroke="#38bdf8" stroke-width="5" opacity="0.15"/>
+      <path id="flow-suc2" d="M 174 255 L 245 255 L 245 265 L 350 265" fill="none" stroke="#38bdf8" stroke-width="5" opacity="0.15"/>
+      <path d="M 425 90 L 545 90 L 545 80 L 646 80" fill="none" stroke="#334155" stroke-width="14" stroke-linejoin="round"/>
+      <path d="M 425 240 L 545 240 L 545 90" fill="none" stroke="#334155" stroke-width="14" stroke-linejoin="round"/>
+      <path id="flow-rec1" d="M 425 90 L 545 90 L 545 80 L 646 80" fill="none" stroke="#00e5ff" stroke-width="5" opacity="0.15"/>
+      <path id="flow-rec2" d="M 425 240 L 545 240 L 545 80 L 646 80" fill="none" stroke="#00e5ff" stroke-width="5" opacity="0.15"/>
+      <g transform="translate(290, 115)">
+        <polygon points="-10,-8 0,0 -10,8" fill="#64748b"/><polygon points="10,-8 0,0 10,8" fill="#64748b"/>
+        <line x1="0" y1="0" x2="0" y2="-14" stroke="#94a3b8" stroke-width="2"/><line x1="-7" y1="-14" x2="7" y2="-14" stroke="#38bdf8" stroke-width="3"/>
+      </g>
+      <g transform="translate(290, 265)">
+        <polygon points="-10,-8 0,0 -10,8" fill="#64748b"/><polygon points="10,-8 0,0 10,8" fill="#64748b"/>
+        <line x1="0" y1="0" x2="0" y2="-14" stroke="#94a3b8" stroke-width="2"/><line x1="-7" y1="-14" x2="7" y2="-14" stroke="#38bdf8" stroke-width="3"/>
+      </g>
+      <g transform="translate(485, 90)">
+        <polygon points="-10,-8 0,0 -10,8" fill="#64748b"/><polygon points="10,-8 0,0 10,8" fill="#64748b"/>
+        <circle cx="0" cy="-14" r="6" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+      </g>
+      <g transform="translate(485, 240)">
+        <polygon points="-10,-8 0,0 -10,8" fill="#64748b"/><polygon points="10,-8 0,0 10,8" fill="#64748b"/>
+        <circle cx="0" cy="-14" r="6" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+      </g>
+      <rect x="32" y="71" width="146" height="218" rx="10" fill="url(#tankShell)" stroke="#475569" stroke-width="2"/>
+      <g clip-path="url(#clipInf)">
+        <rect id="svg-winf" x="36" y="105" width="138" height="180" fill="url(#waterGrad)"/>
+        <line id="svg-lineinf" x1="36" y1="105" x2="174" y2="105" stroke="#bae6fd" stroke-width="2"/>
+      </g>
+      <line x1="52" y1="95" x2="52" y2="265" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 6"/>
+      <text x="105" y="58" fill="#94a3b8" font-size="11" font-weight="bold" text-anchor="middle">CISTERNA INFERIOR</text>
+      <text id="svg-pct-inf" x="105" y="190" fill="#ffffff" font-size="30" font-weight="900" text-anchor="middle" style="text-shadow:0 2px 8px #000">85%</text>
+      <text id="svg-di1" x="105" y="308" fill="#34d399" font-size="11" font-weight="bold" text-anchor="middle">BOIA DI1: OK</text>
+      <g id="grp-b1">
+        <rect x="355" y="150" width="70" height="8" rx="2" fill="#475569"/>
+        <rect x="395" y="80" width="32" height="24" rx="2" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+        <circle cx="390" cy="115" r="36" fill="#0f172a" stroke="#64748b" stroke-width="4"/>
+        <circle cx="390" cy="115" r="24" fill="#060a11" stroke="#334155" stroke-width="2"/>
+        <g id="svg-rot1">
+          <line x1="390" y1="93" x2="390" y2="137" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
+          <line x1="368" y1="115" x2="412" y2="115" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
+          <line x1="374" y1="99" x2="406" y2="131" stroke="#0284c7" stroke-width="3" stroke-linecap="round"/>
+          <line x1="374" y1="131" x2="406" y2="99" stroke="#0284c7" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="390" cy="115" r="7" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+        </g>
+        <text x="390" y="68" fill="#f8fafc" font-size="12" font-weight="800" text-anchor="middle">BOMBA 01</text>
+        <rect id="tag-bg-b1" x="352" y="164" width="76" height="18" rx="4" fill="#1e293b"/>
+        <text id="tag-txt-b1" x="390" y="177" fill="#94a3b8" font-size="10" font-weight="800" text-anchor="middle">PARADA</text>
+      </g>
+      <g id="grp-b2">
+        <rect x="355" y="300" width="70" height="8" rx="2" fill="#475569"/>
+        <rect x="395" y="230" width="32" height="24" rx="2" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+        <circle cx="390" cy="265" r="36" fill="#0f172a" stroke="#64748b" stroke-width="4"/>
+        <circle cx="390" cy="265" r="24" fill="#060a11" stroke="#334155" stroke-width="2"/>
+        <g id="svg-rot2">
+          <line x1="390" y1="243" x2="390" y2="287" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
+          <line x1="368" y1="265" x2="412" y2="265" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
+          <line x1="374" y1="249" x2="406" y2="281" stroke="#0284c7" stroke-width="3" stroke-linecap="round"/>
+          <line x1="374" y1="281" x2="406" y2="249" stroke="#0284c7" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="390" cy="265" r="7" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+        </g>
+        <text x="390" y="218" fill="#f8fafc" font-size="12" font-weight="800" text-anchor="middle">BOMBA 02</text>
+        <rect id="tag-bg-b2" x="352" y="314" width="76" height="18" rx="4" fill="#1e293b"/>
+        <text id="tag-txt-b2" x="390" y="327" fill="#94a3b8" font-size="10" font-weight="800" text-anchor="middle">PARADA</text>
+      </g>
+      <rect x="642" y="51" width="146" height="218" rx="10" fill="url(#tankShell)" stroke="#475569" stroke-width="2"/>
+      <g clip-path="url(#clipSup)">
+        <rect id="svg-wsup" x="646" y="170" width="138" height="95" fill="url(#waterGrad)"/>
+        <line id="svg-linesup" x1="646" y1="170" x2="784" y2="170" stroke="#bae6fd" stroke-width="2"/>
+      </g>
+      <line x1="662" y1="75" x2="662" y2="245" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 6"/>
+      <text x="715" y="38" fill="#94a3b8" font-size="11" font-weight="bold" text-anchor="middle">CAIXA SUPERIOR</text>
+      <text id="svg-pct-sup" x="715" y="170" fill="#ffffff" font-size="30" font-weight="900" text-anchor="middle" style="text-shadow:0 2px 8px #000">45%</text>
+      <text id="svg-di2" x="715" y="288" fill="#94a3b8" font-size="11" font-weight="bold" text-anchor="middle">BOIA DI2: DESLIGADA</text>
+    </svg>
+  </div>
+  <div class="pumps-telemetry">
+    <div class="motor-panel" id="mp-b1">
+      <div class="mp-top"><span class="mp-title">Conjunto Motobomba 01</span><span class="pill" id="mp-st-b1">PARADA</span></div>
+      <div class="mp-grid">
+        <div class="mp-stat"><small>CORRENTE</small><b id="c-b1">0.0 A</b></div>
+        <div class="mp-stat"><small>HORÍMETRO</small><b id="h-b1">0.00 h</b></div>
+        <div class="mp-stat"><small>PARTIDAS</small><b id="p-b1">0</b></div>
+      </div>
+    </div>
+    <div class="motor-panel" id="mp-b2">
+      <div class="mp-top"><span class="mp-title">Conjunto Motobomba 02</span><span class="pill" id="mp-st-b2">PARADA</span></div>
+      <div class="mp-grid">
+        <div class="mp-stat"><small>CORRENTE</small><b id="c-b2">0.0 A</b></div>
+        <div class="mp-stat"><small>HORÍMETRO</small><b id="h-b2">0.00 h</b></div>
+        <div class="mp-stat"><small>PARTIDAS</small><b id="p-b2">0</b></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="card">
+  <div class="sec-title"><span>Seletor de Modo Automático</span></div>
+  <div class="btn-row">
+    <button id="m-0" onclick="cmd('modo',0)">Alternância Ciclo</button>
+    <button id="m-1" onclick="cmd('modo',1)">Por Horímetro</button>
+    <button id="m-2" onclick="cmd('modo',2)">Principal / Reserva</button>
+    <button id="m-3" onclick="cmd('modo',3)">Modo Manual</button>
+  </div>
+</div>
+<div class="card">
+  <div class="sec-title"><span>Prioridade e Habilitação</span></div>
+  <div class="btn-row">
+    <button id="sel-p1" onclick="cmd('princ',1)">B1 Principal</button>
+    <button id="sel-p2" onclick="cmd('princ',2)">B2 Principal</button>
+    <button id="perm-1" onclick="cmd('perm',1)">Habilita B1</button>
+    <button id="perm-2" onclick="cmd('perm',2)">Habilita B2</button>
+  </div>
+</div>
+<div class="card">
+  <div class="sec-title"><span>Acionamento Manual Direto (Teste de Relés)</span></div>
+  <div class="btn-row">
+    <button class="btn-start" onclick="cmd('man',1)">▶ Ligar Bomba 1</button>
+    <button class="btn-start" onclick="cmd('man',2)">▶ Ligar Bomba 2</button>
+    <button class="btn-stop" onclick="cmd('man',0)">■ Parar Todas</button>
+    <button onclick="cmd('reset',1)">↻ Reset Falhas</button>
+  </div>
+</div>
+<div class="card">
+  <div class="sec-title">
+    <span>Supervisão de Entradas e Barramento (8DI)</span>
+    <button style="padding:5px 10px;font-size:10px;" onclick="cmd('sim485',1)">Alternar Contingência</button>
+  </div>
+  <div class="alarm-row al-ok" id="al-485"><span>Comunicação Sonda Hidrostática (RS485)</span><span id="al-485-v">--</span></div>
+  <div class="alarm-row al-ok" id="al-cxi"><span>Boia Nível Mínimo Cisterna (DI1)</span><span id="al-cxi-v">--</span></div>
+  <div class="alarm-row al-ok" id="al-b1"><span>Relé Térmico Bomba 01 (DI4)</span><span id="al-b1-v">--</span></div>
+  <div class="alarm-row al-ok" id="al-b2"><span>Relé Térmico Bomba 02 (DI5)</span><span id="al-b2-v">--</span></div>
+</div>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+const modos = ["Ciclo", "Horímetro", "Princ/Reserva", "Manual"];
+let cli = null, base = '', ultimoDado = 0;
+function lerCfg(){ try { return JSON.parse(localStorage.getItem('recalqueCfg') || '{}'); } catch(e){ return {}; } }
+function salvarCfg(c){ try { localStorage.setItem('recalqueCfg', JSON.stringify(c)); } catch(e){} }
+function pill(id, ok, txt){ const e=document.getElementById(id); e.className="pill "+(ok===null?"":(ok?"ok":"err")); e.innerHTML=`<span class="led"></span>${txt}`; }
+
+function entrar(){
+  const c = {
+    host: document.getElementById('f-host').value.trim().replace(/^.*:\/\//,'').replace(/[:\/].*$/,''),
+    port: parseInt(document.getElementById('f-port').value, 10) || 8084,
+    user: document.getElementById('f-user').value.trim(),
+    pass: document.getElementById('f-pass').value,
+    base: document.getElementById('f-base').value.trim().replace(/\/+$/,'')
+  };
+  if(!c.host || !c.user || !c.pass || !c.base){ document.getElementById('login-msg').innerText="Preencha todos os campos."; return; }
+  salvarCfg(c); conectar(c);
+}
+function sair(){
+  if(cli) cli.end(true);
+  const c = lerCfg(); delete c.pass; salvarCfg(c);
+  location.reload();
+}
+function conectar(c){
+  base = c.base;
+  document.getElementById('login-msg').style.color = '#8b9bb4';
+  document.getElementById('login-msg').innerText = "Conectando...";
+  if (cli) cli.end(true);
+  cli = mqtt.connect(`wss://${c.host}:${c.port || 8084}/mqtt`, {
+    username: c.user, password: c.pass,
+    clientId: 'painel-' + Math.random().toString(16).slice(2, 10),
+    reconnectPeriod: 3000, connectTimeout: 10000, clean: true
+  });
+  cli.on('connect', () => {
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('dash').style.display = 'block';
+    pill('bdg-nuvem', true, 'NUVEM OK');
+    cli.subscribe([base + '/status', base + '/online'], { qos: 1 });
+    avisarVendo();
+  });
+  cli.on('message', (t, m) => {
+    const txt = m.toString();
+    if (t.endsWith('/online')) { pill('bdg-placa', txt === '1', txt === '1' ? 'PLACA ONLINE' : 'PLACA OFFLINE'); return; }
+    try { const d = JSON.parse(txt); ultimoDado = Date.now(); render(d); } catch(e) {}
+  });
+  cli.on('offline', () => pill('bdg-nuvem', false, 'NUVEM OFF'));
+  cli.on('reconnect', () => pill('bdg-nuvem', null, 'RECONECTANDO'));
+  cli.on('error', (e) => {
+    const msg = /auth|Not authorized|Bad user/i.test(e.message) ? "Usuário ou senha incorretos." : ("Erro: " + e.message);
+    document.getElementById('login-msg').style.color = '#f87171';
+    document.getElementById('login-msg').innerText = msg;
+  });
+}
+function avisarVendo(){ if (cli && cli.connected) cli.publish(base + '/cmd/ver', '1'); }
+function cmd(tipo, val) {
+  if (!cli || !cli.connected) return;
+  cli.publish(base + '/cmd/' + tipo, String(val), { qos: 1 });
+  setTimeout(avisarVendo, 300);
+}
+function render(d) {
+    document.getElementById('sub-info').innerText = `REMOTO: ${base} | I2C RELÉS: 0x${d.i2c.toString(16)} | UPTIME: ${d.uptime}s`;
+    document.getElementById('k-dem').innerText = d.demanda ? "ATIVA" : "STAND-BY";
+    document.getElementById('k-bat').innerText = d.ativa == 0 ? "NENHUMA" : "BOMBA 0" + d.ativa;
+    document.getElementById('k-prox').innerText = "BOMBA 0" + d.prox;
+    document.getElementById('k-modo').innerText = modos[d.modo];
+
+    let hInf = (d.nInf / 100) * 210;
+    let yInf = 285 - hInf;
+    document.getElementById('svg-winf').setAttribute('y', yInf);
+    document.getElementById('svg-winf').setAttribute('height', hInf);
+    document.getElementById('svg-lineinf').setAttribute('y1', yInf);
+    document.getElementById('svg-lineinf').setAttribute('y2', yInf);
+    document.getElementById('svg-pct-inf').textContent = d.nInf + "%";
+
+    let hSup = (d.nSup / 100) * 210;
+    let ySup = 265 - hSup;
+    document.getElementById('svg-wsup').setAttribute('y', ySup);
+    document.getElementById('svg-wsup').setAttribute('height', hSup);
+    document.getElementById('svg-linesup').setAttribute('y1', ySup);
+    document.getElementById('svg-linesup').setAttribute('y2', ySup);
+    document.getElementById('svg-pct-sup').textContent = d.nSup + "%";
+
+    document.getElementById('svg-di1').textContent = d.di1 ? "BOIA DI1: COM ÁGUA" : "BOIA DI1: SECO!";
+    document.getElementById('svg-di1').setAttribute('fill', d.di1 ? "#34d399" : "#f87171");
+    document.getElementById('svg-di2').textContent = d.di2 ? "BOIA DI2: PEDINDO ÁGUA" : "BOIA DI2: CHEIA";
+    document.getElementById('svg-di2').setAttribute('fill', d.di2 ? "#38bdf8" : "#94a3b8");
+
+    atualizaBomba(1, d.b1);
+    atualizaBomba(2, d.b2);
+
+    setFluxo('flow-suc1', 'flow-rec1', d.b1.rod);
+    setFluxo('flow-suc2', 'flow-rec2', d.b2.rod);
+
+    for(let i=0;i<4;i++) document.getElementById('m-'+i).className = (d.modo==i) ? 'sel-blue' : '';
+    document.getElementById('sel-p1').className = (d.princ==1) ? 'sel-blue' : '';
+    document.getElementById('sel-p2').className = (d.princ==2) ? 'sel-blue' : '';
+    document.getElementById('perm-1').className = d.b1.perm ? 'sel-amber' : '';
+    document.getElementById('perm-2').className = d.b2.perm ? 'sel-amber' : '';
+
+    setAlarme('al-485', 'al-485-v', d.rs485, d.rs485 ? "ONLINE (MODBUS RTU)" : "CONTINGÊNCIA (BOIA DI2)");
+    setAlarme('al-cxi', 'al-cxi-v', !d.alInf, d.alInf ? "ALARME: NÍVEL BAIXO" : "NORMAL");
+    setAlarme('al-b1', 'al-b1-v', !d.b1.falha, d.b1.falha ? d.b1.motivo : "NORMAL");
+    setAlarme('al-b2', 'al-b2-v', !d.b2.falha, d.b2.falha ? d.b2.motivo : "NORMAL");
+
+    document.getElementById('bdg-485').className = "pill " + (d.rs485 ? "ok" : "err");
+    document.getElementById('bdg-485').innerHTML = `<span class="led"></span>${d.rs485 ? "RS485 OK" : "RS485 OFF"}`;
+    document.getElementById('bdg-boia').className = "pill " + (!d.rs485 ? "ok" : "");
+    document.getElementById('bdg-boia').innerHTML = `<span class="led"></span>${!d.rs485 ? "BOIA DIRETA ATIVA" : "BOIA STAND-BY"}`;
+}
+function setFluxo(idSuc, idRec, ativo) {
+  const s = document.getElementById(idSuc);
+  const r = document.getElementById(idRec);
+  s.setAttribute('opacity', ativo ? '1' : '0.15');
+  r.setAttribute('opacity', ativo ? '1' : '0.15');
+  s.setAttribute('class', ativo ? 'pipe-flow' : '');
+  r.setAttribute('class', ativo ? 'pipe-flow' : '');
+}
+function atualizaBomba(n, b) {
+  const panel = document.getElementById('mp-b'+n);
+  const st = document.getElementById('mp-st-b'+n);
+  const rot = document.getElementById('svg-rot'+n);
+  const tagBg = document.getElementById('tag-bg-b'+n);
+  const tagTxt = document.getElementById('tag-txt-b'+n);
+
+  panel.className = "motor-panel " + (b.falha ? "fault" : (b.rod ? "active" : ""));
+  st.className = "pill " + (b.falha ? "err" : (b.rod ? "ok" : ""));
+  st.innerHTML = `<span class="led"></span>${b.falha ? "FALHA" : (b.rod ? "OPERANDO" : "PARADA")}`;
+
+  rot.setAttribute('class', b.rod ? 'spin-b'+n : '');
+  tagBg.setAttribute('fill', b.falha ? '#991b1b' : (b.rod ? '#065f46' : '#1e293b'));
+  tagTxt.setAttribute('fill', b.falha ? '#fca5a5' : (b.rod ? '#34d399' : '#94a3b8'));
+  tagTxt.textContent = b.falha ? "FALHA" : (b.rod ? "LIGADA" : "PARADA");
+
+  document.getElementById('c-b'+n).innerText = b.corr.toFixed(1) + " A";
+  document.getElementById('h-b'+n).innerText = b.hor.toFixed(2) + " h";
+  document.getElementById('p-b'+n).innerText = b.part;
+}
+function setAlarme(idBox, idTxt, ok, msg) {
+  document.getElementById(idBox).className = "alarm-row " + (ok ? "al-ok" : "al-err");
+  document.getElementById(idTxt).innerText = msg;
+}
+
+setInterval(avisarVendo, 20000);
+setInterval(() => { document.getElementById('stale').style.display = (ultimoDado && Date.now() - ultimoDado > 10000) ? 'block' : 'none'; }, 2000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) avisarVendo(); });
+(function(){ const c = lerCfg();
+  ['host','port','user','base'].forEach(k => { if (c[k]) document.getElementById('f-'+k).value = c[k]; });
+  if (c.host && c.user && c.pass && c.base) { document.getElementById('f-pass').value = c.pass; conectar(c); }
+})();
+</script>
+</div>
+</body>
+</html>
