@@ -340,7 +340,10 @@
       <h3>Alarmes no celular</h3>
       <label class="lb">Endereço do carteiro de notificações (Cloudflare)</label><input id="c-pushUrl" class="in" placeholder="https://recalque-alertas.SEU-USUARIO.workers.dev" autocapitalize="off">
       <label class="lb">Link do painel remoto (abre ao tocar no alarme)</label><input id="c-link" class="in" placeholder="https://usuario.github.io/repositorio/" autocapitalize="off">
-      <label class="lb">Quem recebe ligação no Telegram (ex: @jef, @tecnico2)</label><input id="c-tg" class="in" autocapitalize="off">
+      <label class="lb">Pushover — User Key (sua chave de usuário)</label><input id="c-poUser" class="in" autocapitalize="off" autocorrect="off" placeholder="u...">
+      <label class="lb">Pushover — API Token do aplicativo</label><input id="c-poToken" class="in" type="password" autocapitalize="off" autocorrect="off" placeholder="a...">
+      <label class="chk"><input id="c-poEmerg" type="checkbox"> Alarme crítico em modo emergência (toca e repete até confirmar)</label>
+      <label class="lb">Telegram para ligação (opcional, CallMeBot)</label><input id="c-tg" class="in" autocapitalize="off">
       <label class="chk"><input id="c-ligar" type="checkbox"> Ligar no Telegram em alarme crítico</label>
       <label class="lb">Tópico ntfy (opcional)</label><input id="c-ntfy" class="in" autocapitalize="off">
     </div>
@@ -376,7 +379,7 @@
       <h3>Testar alarmes</h3>
       <div class="btn-row" style="grid-template-columns:1fr 1fr;">
         <button onclick="cmd('teste',1)">🔔 Testar notificação</button>
-        <button onclick="cmd('teste',2)">📞 Testar ligação</button>
+        <button onclick="cmd('teste',2)">🚨 Testar alarme crítico</button>
       </div>
     </div>
     <div class="cfg-sec ctrl">
@@ -654,8 +657,8 @@ function preencherConfig(){
   $('c-baud').value = String(c.baud || 9600);
   sensEdit = JSON.parse(JSON.stringify(c.sens || []));
   desenharSensores();
-  ['pushUrl','link','tg','ntfy'].forEach(n => $('c-' + n).value = a[n] || '');
-  $('c-ligar').checked = !!a.ligar;
+  ['pushUrl','link','tg','ntfy','poUser','poToken'].forEach(n => $('c-' + n).value = a[n] || '');
+  $('c-ligar').checked = !!a.ligar; $('c-poEmerg').checked = a.poEmerg !== false;
   if (LOCAL) {
     $('c-ssid').value = r.ssid || ''; $('c-wpass').value = r.pass || ''; $('c-eth').checked = !!r.eth; $('c-apPass').value = r.apPass || '';
     $('c-mqHost').value = r.mqHost || ''; $('c-mqPort').value = r.mqPort || 8883; $('c-mqUser').value = r.mqUser || ''; $('c-mqPass').value = r.mqPass || ''; $('c-mqBase').value = r.mqBase || '';
@@ -718,7 +721,8 @@ function salvarConfig(){
     sens: sensEdit, baud: +$('c-baud').value,
     ctrl: { liga: num('c-liga'), desliga: num('c-desliga'), cistMin: num('c-cistMin'), cistVolta: num('c-cistVolta'),
             corrMax: num('c-corrMax') || 0, corrSeco: num('c-corrSeco') || 0, tRetorno: parseInt($('c-tRetorno').value) || 0, buzzer: $('c-buzzer').checked },
-    alarmes: { pushUrl: $('c-pushUrl').value.trim(), link: $('c-link').value.trim(), tg: $('c-tg').value.trim(), ligar: $('c-ligar').checked, ntfy: $('c-ntfy').value.trim() }
+    alarmes: { pushUrl: $('c-pushUrl').value.trim(), link: $('c-link').value.trim(), tg: $('c-tg').value.trim(), ligar: $('c-ligar').checked, ntfy: $('c-ntfy').value.trim(),
+               poUser: $('c-poUser').value.trim(), poToken: $('c-poToken').value.trim(), poEmerg: $('c-poEmerg').checked }
   };
   if (!(nova.ctrl.liga < nova.ctrl.desliga)) { $('c-msg').style.color = '#f87171'; $('c-msg').innerText = 'O nível de ligar precisa ser menor que o de desligar.'; return; }
   const ids = nova.sens.map(s => s.id + ':' + s.reg);
