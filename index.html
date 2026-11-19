@@ -335,6 +335,20 @@
         </select>
         <button onclick="addSensor()">＋ Adicionar sensor</button>
       </div>
+      <div class="scard" style="margin-top:14px;border-color:#0369a1;">
+        <b style="color:#38bdf8;">🔍 Testar comunicação (descobrir registros)</b>
+        <p class="hint">Lê o aparelho na hora. Compare os valores com o número do visor: ex. visor 1.25 e valor 125 → esse é o registro, escala 0.01.</p>
+        <div class="g3"><div><label class="lb">Endereço</label><input id="sc-id" class="in" type="number" value="1"></div>
+          <div><label class="lb">Função</label><select id="sc-fc" class="in"><option value="3">03 Holding</option><option value="4">04 Input</option></select></div>
+          <div><label class="lb">Velocidade</label><select id="sc-baud" class="in"><option value="0">a da config</option><option>2400</option><option>4800</option><option>9600</option><option>19200</option></select></div></div>
+        <div class="g2"><div><label class="lb">Registro inicial</label><input id="sc-ini" class="in" type="number" value="0"></div>
+          <div><label class="lb">Quantidade (máx 40)</label><input id="sc-qtd" class="in" type="number" value="20"></div></div>
+        <div class="btn-row" style="grid-template-columns:1fr 1fr;margin-top:10px;">
+          <button onclick="varrer('regs')">Ler registros</button>
+          <button onclick="varrer('ids')">Procurar endereço (1–64)</button>
+        </div>
+        <div id="sc-res" style="margin-top:10px;font-size:13px;"></div>
+      </div>
     </div>
     <div class="cfg-sec">
       <h3>Alarmes no celular</h3>
@@ -513,7 +527,7 @@ function conectar(c){
   cli.on('connect', () => {
     $('login').style.display = 'none'; $('app').style.display = 'block';
     pill('bdg-nuvem', true, 'NUVEM OK');
-    cli.subscribe(['status','online','ota','versao','evento','eventos','config','config_resp'].map(t => base + '/' + t), { qos: 1 });
+    cli.subscribe(['status','online','ota','versao','evento','eventos','config','config_resp','scan_resp'].map(t => base + '/' + t), { qos: 1 });
     avisarVendo();
   });
   cli.on('message', (t, m) => {
@@ -526,6 +540,7 @@ function conectar(c){
       const d = JSON.parse(txt);
       if (k === 'status') { ultimoDado = Date.now(); render(d); }
       else if (k === 'eventos') renderEventos(d);
+      else if (k === 'scan_resp') mostrarScan(d);
       else if (k === 'config') { cfgAtual = d; aplicarNome(); if ($('v-config').classList.contains('on') && !cfgEditando) preencherConfig(); }
     } catch(e) {}
   });
@@ -741,6 +756,28 @@ function salvarConfig(){
     cli.publish(base + '/cmd/config', JSON.stringify(nova), { qos: 1 });
     setTimeout(() => { if (cfgEditando) { cfgEditando = false; $('c-msg').style.color = '#f87171'; $('c-msg').innerText = 'A placa não confirmou. Ela está online?'; } }, 10000);
   }
+}
+
+// ---------------- VARREDURA RS485 ----------------
+function mostrarScan(d){
+  const res = $('sc-res');
+  if (!d || !Array.isArray(d.r)) { res.innerHTML = '<span style="color:#f87171">Sem resposta.</span>'; return; }
+  if (d.modo === 'ids') {
+    res.innerHTML = d.r.length ? '<b style="color:#34d399">Responderam: ' + d.r.map(x => 'endereço ' + x.id).join(', ') + '</b>' : '<span style="color:#f87171">Nenhum endereço respondeu. Confira A/B (inverta se precisar), a velocidade e se o aparelho tem RS485.</span>';
+    return;
+  }
+  const ok = d.r.filter(x => x.v !== null).length;
+  if (!ok) { res.innerHTML = '<span style="color:#f87171">Nenhum registro respondeu nesse endereço/função. Tente a outra função (03/04), outra velocidade ou "Procurar endereço".</span>'; return; }
+  res.innerHTML = '<table style="width:100%;border-collapse:collapse;font-family:monospace;"><tr style="color:var(--muted)"><td>Registro</td><td>Valor</td><td>Com sinal</td></tr>' +
+    d.r.map(x => x.v === null ? `<tr><td>${x.reg}</td><td colspan="2" style="color:#64748b">—</td></tr>` :
+      `<tr><td>${x.reg}</td><td style="color:#38bdf8">${x.v}</td><td>${x.v > 32767 ? x.v - 65536 : x.v}</td></tr>`).join('') + '</table>';
+}
+function varrer(modo){
+  const q = { modo, id: +$('sc-id').value || 1, fc: +$('sc-fc').value, ini: +$('sc-ini').value || 0, qtd: +$('sc-qtd').value || 20, baud: +$('sc-baud').value || 0 };
+  $('sc-res').innerHTML = '<span style="color:#fbbf24">Lendo... ' + (modo === 'ids' ? '(até 15 s)' : '') + '</span>';
+  if (LOCAL) { fetch('/api/scan?' + new URLSearchParams(q)).then(r => r.json()).then(mostrarScan).catch(() => mostrarScan(null)); return; }
+  if (!cli || !cli.connected) { mostrarScan(null); return; }
+  cli.publish(base + '/cmd/scan', JSON.stringify(q), { qos: 1 });
 }
 
 // ---------------- OTA REMOTO ----------------
