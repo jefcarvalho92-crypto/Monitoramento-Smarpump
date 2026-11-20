@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#070b12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Recalque">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>SCADA Recalque V8</title>
+<style>
+
+  :root {
+    --bg: #070b12; --panel: #0f1622; --border: #233044;
+    --text: #f1f5f9; --muted: #8b9bb4;
+    --green: #10b981; --red: #ef4444; --cyan: #06b6d4; --amber: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+  body { background: radial-gradient(circle at top, #111b2e 0%, #05080f 100%); color: var(--text); padding: 12px; max-width: 1180px; margin: auto; min-height: 100vh; }
+  .card { background: linear-gradient(180deg, #131c2c 0%, #0c121d 100%); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; box-shadow: 0 12px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06); }
+  .topbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid #1e293b; padding-bottom: 12px; margin-bottom: 14px; }
+  .brand h1 { font-size: 19px; font-weight: 800; letter-spacing: 0.6px; color: #fff; text-transform: uppercase; }
+  .brand p { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: monospace; }
+  .status-pills { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .pill { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; border: 1px solid #2a3950; background: #0a0f18; color: var(--muted); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .pill.ok { background: rgba(16,185,129,0.12); color: #34d399; border-color: #059669; box-shadow: 0 0 12px rgba(16,185,129,0.25); }
+  .pill.err { background: rgba(239,68,68,0.16); color: #f87171; border-color: #dc2626; box-shadow: 0 0 12px rgba(239,68,68,0.3); }
+  .pill.ota { background: linear-gradient(180deg, #0284c7 0%, #0369a1 100%); color: #fff; border-color: #38bdf8; }
+  .led { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+  .kpi-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .kpi-box { background: #070b13; border: 1px solid #1b2638; border-radius: 8px; padding: 10px 14px; box-shadow: inset 0 2px 8px rgba(0,0,0,0.6); }
+  .kpi-box span { font-size: 10px; color: var(--muted); text-transform: uppercase; font-weight: 700; display: block; }
+  .kpi-box strong { font-size: 18px; color: #38bdf8; font-weight: 800; margin-top: 2px; display: block; }
+  .scada-stage { background: #060a11; border: 1px solid #1c283b; border-radius: 12px; padding: 14px; overflow-x: auto; box-shadow: inset 0 0 30px rgba(0,0,0,0.9); }
+  .scada-svg { width: 100%; min-width: 760px; height: auto; display: block; }
+  @keyframes flowAnim { to { stroke-dashoffset: -24; } }
+  .pipe-flow { stroke-dasharray: 12 12; animation: flowAnim 0.6s linear infinite; }
+  @keyframes impellerSpin { 100% { transform: rotate(360deg); } }
+  .spin-b1 { animation: impellerSpin 0.45s linear infinite; transform-origin: 390px 115px; }
+  .spin-b2 { animation: impellerSpin 0.45s linear infinite; transform-origin: 390px 265px; }
+  .pumps-telemetry { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  @media(max-width:768px){ .pumps-telemetry { grid-template-columns: 1fr; } .kpi-bar { grid-template-columns: repeat(2,1fr); } }
+  .motor-panel { background: #090e17; border: 1px solid #1f2d42; border-radius: 10px; padding: 12px 16px; transition: 0.3s; }
+  .motor-panel.active { border-color: #10b981; box-shadow: 0 0 18px rgba(16,185,129,0.18); }
+  .motor-panel.fault { border-color: #ef4444; box-shadow: 0 0 18px rgba(239,68,68,0.25); }
+  .mp-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #172233; padding-bottom: 6px; }
+  .mp-title { font-size: 15px; font-weight: 800; color: #fff; }
+  .mp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+  .mp-stat { background: #05080e; padding: 6px; border-radius: 6px; border: 1px solid #151f30; }
+  .mp-stat small { font-size: 10px; color: var(--muted); display: block; }
+  .mp-stat b { font-size: 14px; color: #e2e8f0; font-family: monospace; }
+  .sec-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .btn-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  @media(max-width:768px){ .btn-row { grid-template-columns: 1fr 1fr; } }
+  button { padding: 12px 10px; border-radius: 8px; border: 1px solid #2b3b52; background: linear-gradient(180deg, #1c283b 0%, #111827 100%); color: #e2e8f0; font-weight: 800; font-size: 12px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08); transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.4px; }
+  button:active { transform: translateY(2px); }
+  button.sel-blue { background: linear-gradient(180deg, #0284c7 0%, #0369a1 100%); border-color: #38bdf8; color: #fff; box-shadow: 0 0 14px rgba(14,165,233,0.45); }
+  button.sel-amber { background: linear-gradient(180deg, #d97706 0%, #b45309 100%); border-color: #fbbf24; color: #fff; }
+  button.btn-start { background: linear-gradient(180deg, #059669 0%, #047857 100%); border-color: #34d399; color: #fff; }
+  button.btn-stop { background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%); border-color: #f87171; color: #fff; }
+  .alarm-row { display: flex; justify-content: space-between; padding: 9px 12px; border-radius: 7px; margin-bottom: 6px; font-size: 12px; font-weight: 700; }
+  .al-ok { background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.22); color: #34d399; }
+  .al-err { background: rgba(239,68,68,0.16); border: 1px solid rgba(239,68,68,0.45); color: #fca5a5; }
+  .lb { display:block; font-size:11px; color: var(--muted); margin-top:10px; font-weight:700; text-transform:uppercase; }
+  .in { width:100%; padding:11px; margin-top:4px; background:#05080e; color:#fff; border:1px solid #233044; border-radius:8px; font-size:14px; }
+  #stale { display:none; background:rgba(245,158,11,0.15); border:1px solid #f59e0b; color:#fbbf24; padding:8px 12px; border-radius:8px; font-size:12px; font-weight:700; margin-bottom:12px; }
+  body.viewer .ctrl { display: none !important; }
+  .vtag { display:none; }
+  body.viewer .vtag { display:inline-flex; }
+
+  body { padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .lb { display:block; font-size:11px; color: var(--muted); margin-top:10px; font-weight:700; text-transform:uppercase; }
+  .in, select.in { width:100%; padding:10px; margin-top:4px; background:#05080e; color:#fff; border:1px solid #233044; border-radius:8px; font-size:14px; }
+  .tabs { display:flex; gap:6px; margin-bottom:14px; overflow-x:auto; }
+  .tab { flex:1; min-width:90px; padding:11px 8px; border-radius:8px; border:1px solid #233044; background:#0a0f18; color:var(--muted); font-weight:800; font-size:12px; text-transform:uppercase; cursor:pointer; text-align:center; }
+  .tab.on { background:linear-gradient(180deg,#0284c7 0%,#0369a1 100%); color:#fff; border-color:#38bdf8; }
+  @media(max-width:600px){ .scada-svg { min-width:0 !important; } .scada-stage { padding:6px; } .tab { min-width:0; font-size:10.5px; padding:10px 2px; letter-spacing:0; } .tabs { gap:4px; } }
+  .view { display:none; } .view.on { display:block; }
+  #stale, #banner { display:none; padding:10px 12px; border-radius:8px; font-size:13px; font-weight:700; margin-bottom:12px; }
+  #stale { background:rgba(245,158,11,0.15); border:1px solid #f59e0b; color:#fbbf24; }
+  #banner { background:rgba(239,68,68,0.16); border:1px solid #ef4444; color:#fca5a5; }
+  #banner div { padding:2px 0; }
+  .di-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  @media(max-width:768px){ .di-grid { grid-template-columns:repeat(2,1fr); } }
+  .di { background:#05080e; border:1px solid #1b2638; border-radius:8px; padding:9px 10px; }
+  .di small { display:block; font-size:10px; color:var(--muted); font-weight:700; }
+  .di b { display:block; font-size:12px; margin:3px 0; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .di span { font-size:11px; font-weight:800; }
+  .di.alm { border-color:#ef4444; background:rgba(239,68,68,0.1); } .di.alm span { color:#f87171; }
+  .di.ok span { color:#34d399; } .di.neu span { color:#94a3b8; } .di.act span { color:#38bdf8; }
+  .srow { display:flex; justify-content:space-between; align-items:center; padding:9px 12px; border-radius:7px; margin-bottom:6px; background:#05080e; border:1px solid #1b2638; font-size:13px; }
+  .srow b { font-family:monospace; font-size:15px; color:#38bdf8; }
+  .srow .bad { color:#f87171; font-size:11px; font-weight:800; }
+  .ev { display:flex; gap:10px; padding:8px 10px; border-bottom:1px solid #172233; font-size:13px; }
+  .ev time { color:var(--muted); font-family:monospace; font-size:12px; min-width:86px; }
+  .ev.p5 { color:#fca5a5; } .ev.p4 { color:#fbbf24; }
+  .cfg-sec { border:1px solid #1f2d42; border-radius:10px; padding:12px; margin-bottom:12px; background:#090e17; }
+  .cfg-sec h3 { font-size:13px; text-transform:uppercase; letter-spacing:.6px; color:#94a3b8; margin-bottom:4px; }
+  .cfg-sec p.hint { font-size:12px; color:var(--muted); margin:4px 0 6px; }
+  .g2 { display:grid; grid-template-columns:1fr 1fr; gap:0 10px; } .g3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0 10px; }
+  .dirow { display:grid; grid-template-columns:28px 1fr 1fr 60px; gap:8px; align-items:center; margin-top:8px; }
+  .dirow .in { margin-top:0; }
+  @media(max-width:600px){ .dirow { grid-template-columns:24px 1fr; } .dirow .fsel { grid-column:2; } .dirow .finv { grid-column:2; } }
+  .chk { display:flex; gap:8px; align-items:center; font-size:12px; color:var(--text); margin-top:10px; }
+  .chk input { width:18px; height:18px; }
+  .scard { border:1px solid #233044; border-radius:8px; padding:10px; margin-top:10px; background:#05080e; }
+  .scard-top { display:flex; justify-content:space-between; align-items:center; }
+  .msg { font-size:13px; font-weight:700; margin-top:10px; min-height:18px; }
+  .vtag, .only-remote { display:none; }
+  body.viewer .ctrl { display:none !important; }
+  body.viewer .vtag { display:inline-flex; }
+  body.remote .only-remote { display:block; } body.remote span.only-remote, body.remote .pill.only-remote { display:inline-flex; }
+  body.remote .only-local { display:none !important; }
+  .mp-extra { font-size:12px; color:var(--muted); margin-top:8px; text-align:center; font-family:monospace; }
+  #login { max-width:420px; margin:40px auto; }
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN (só no acesso remoto) ================= -->
+<div id="login" class="card" style="display:none;">
+  <h1 style="font-size:18px;margin-bottom:6px;">SCADA Recalque • Acesso Remoto</h1>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">Dados do broker MQTT (EMQX Cloud). Ficam salvos só neste aparelho.</p>
+  <label class="lb">Servidor (endereço do broker)</label><input id="f-host" class="in" placeholder="xxxxxxxx.ala.eu-central-1.emqxsl.com" autocapitalize="off" autocorrect="off">
+  <label class="lb">Porta WebSocket (wss)</label><input id="f-port" class="in" type="number" value="8084">
+  <label class="lb">Usuário</label><input id="f-user" class="in" autocapitalize="off" autocorrect="off">
+  <label class="lb">Senha</label><input id="f-pass" class="in" type="password">
+  <label class="lb">Tópico base da placa</label><input id="f-base" class="in" placeholder="recalque/jef" autocapitalize="off" autocorrect="off">
+  <label class="chk"><input id="f-viewer" type="checkbox"> Somente visualizar (portaria / síndico)</label>
+  <button class="btn-start" style="width:100%;margin-top:16px;" onclick="entrar()">Conectar</button>
+  <p id="login-msg" class="msg" style="color:#f87171;"></p>
+</div>
+
+<!-- ================= APLICAÇÃO ================= -->
+<div id="app" style="display:none;">
+<div class="card">
+  <div class="topbar">
+    <div class="brand">
+      <h1 id="t-nome">SCADA Recalque • V8</h1>
+      <p id="sub-info">Aguardando dados da placa...</p>
+    </div>
+    <div class="status-pills">
+      <span class="pill only-remote" id="bdg-nuvem"><span class="led"></span>NUVEM --</span>
+      <span class="pill" id="bdg-placa"><span class="led"></span>PLACA --</span>
+      <span class="pill" id="bdg-485"><span class="led"></span>RS485 --</span>
+      <span class="pill vtag">👁 SOMENTE VISUALIZAÇÃO</span>
+      <a href="#" class="pill ota only-remote" onclick="sair();return false;">⎋ SAIR</a>
+    </div>
+  </div>
+  <div class="tabs">
+    <div class="tab on" data-v="painel" onclick="aba('painel')">Painel</div>
+    <div class="tab" data-v="eventos" onclick="aba('eventos')">Eventos</div>
+    <div class="tab ctrl" data-v="config" onclick="aba('config')">Config.</div>
+    <div class="tab" data-v="sistema" onclick="aba('sistema')">Sistema</div>
+  </div>
+  <div id="stale">⚠ Sem dados novos da placa — verifique se ela está ligada e com rede.</div>
+  <div id="banner"></div>
+
+  <!-- ===== PAINEL ===== -->
+  <div class="view on" id="v-painel">
+    <div class="kpi-bar">
+      <div class="kpi-box"><span>Demanda Sistema</span><strong id="k-dem">--</strong></div>
+      <div class="kpi-box"><span>Bomba em Operação</span><strong id="k-bat">--</strong></div>
+      <div class="kpi-box"><span>Próxima Sequência</span><strong id="k-prox">--</strong></div>
+      <div class="kpi-box"><span>Modo Selecionado</span><strong id="k-modo">--</strong></div>
+    </div>
+    <div class="scada-stage">
+<svg class="scada-svg" viewBox="0 0 820 350">
+      <defs>
+        <linearGradient id="tankShell" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#1e293b"/>
+          <stop offset="25%" stop-color="#334155"/>
+          <stop offset="50%" stop-color="#1e293b"/>
+          <stop offset="100%" stop-color="#0f172a"/>
+        </linearGradient>
+        <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#0284c7" stop-opacity="0.95"/>
+        </linearGradient>
+        <clipPath id="clipInf"><rect x="36" y="75" width="138" height="210" rx="8"/></clipPath>
+        <clipPath id="clipSup"><rect x="646" y="55" width="138" height="210" rx="8"/></clipPath>
+      </defs>
+      <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#111a29" stroke-width="1"/>
+      </pattern>
+      <rect width="820" height="350" fill="url(#grid)"/>
+      <path d="M 174 255 L 245 255 L 245 115 L 350 115" fill="none" stroke="#334155" stroke-width="14" stroke-linejoin="round"/>
+      <path d="M 245 255 L 245 265 L 350 265" fill="none" stroke="#334155" stroke-width="14" stroke-linejoin="round"/>
+      <path id="flow-suc1" d="M 174 255 L 245 255 L 245 115 L 350 115" fill="none" stroke="#38bdf8" stroke-width="5" opacity="0.15"/>
+      <path id="flow-suc2" d="M 174 255 L 245 255 L 245 265 L 350 265" fill="none" stroke="#38bdf8" stroke-width="5" opacity="0.15"/>
+      <path d="M 425 90 L 545 90 L 545 80 L 646 80" fill="none" stroke="#334155" stroke-width="14" stroke-linejoin="round"/>
+      <path d="M 425 240 L 545 240 L 545 90" fill="none" stroke="#334155" stroke-width="14" stroke-linejoin="round"/>
+      <path id="flow-rec1" d="M 425 90 L 545 90 L 545 80 L 646 80" fill="none" stroke="#00e5ff" stroke-width="5" opacity="0.15"/>
+      <path id="flow-rec2" d="M 425 240 L 545 240 L 545 80 L 646 80" fill="none" stroke="#00e5ff" stroke-width="5" opacity="0.15"/>
+      <g transform="translate(290, 115)">
+        <polygon points="-10,-8 0,0 -10,8" fill="#64748b"/><polygon points="10,-8 0,0 10,8" fill="#64748b"/>
+        <line x1="0" y1="0" x2="0" y2="-14" stroke="#94a3b8" stroke-width="2"/><line x1="-7" y1="-14" x2="7" y2="-14" stroke="#38bdf8" stroke-width="3"/>
+      </g>
+      <g transform="translate(290, 265)">
+        <polygon points="-10,-8 0,0 -10,8" fill="#64748b"/><polygon points="10,-8 0,0 10,8" fill="#64748b"/>
+        <line x1="0" y1="0" x2="0" y2="-14" stroke="#94a3b8" stroke-width="2"/><line x1="-7" y1="-14" x2="7" y2="-14" stroke="#38bdf8" stroke-width="3"/>
+      </g>
+      <g transform="translate(485, 90)">
+        <polygon points="-10,-8 0,0 -10,8" fill="#64748b"/><polygon points="10,-8 0,0 10,8" fill="#64748b"/>
+        <circle cx="0" cy="-14" r="6" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+      </g>
+      <g transform="translate(485, 240)">
+        <polygon points="-10,-8 0,0 -10,8" fill="#64748b"/><polygon points="10,-8 0,0 10,8" fill="#64748b"/>
+        <circle cx="0" cy="-14" r="6" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+      </g>
+      <rect x="32" y="71" width="146" height="218" rx="10" fill="url(#tankShell)" stroke="#475569" stroke-width="2"/>
+      <g clip-path="url(#clipInf)">
+        <rect id="svg-winf" x="36" y="105" width="138" height="180" fill="url(#waterGrad)"/>
+        <line id="svg-lineinf" x1="36" y1="105" x2="174" y2="105" stroke="#bae6fd" stroke-width="2"/>
+      </g>
+      <line x1="52" y1="95" x2="52" y2="265" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 6"/>
+      <text x="105" y="58" fill="#94a3b8" font-size="11" font-weight="bold" text-anchor="middle">CISTERNA INFERIOR</text>
+      <text id="svg-pct-inf" x="105" y="190" fill="#ffffff" font-size="30" font-weight="900" text-anchor="middle" style="text-shadow:0 2px 8px #000">85%</text>
+      <text id="svg-l-inf" x="105" y="218" fill="#e0f2fe" font-size="13" font-weight="700" text-anchor="middle"></text>
+      <text id="svg-di1" x="105" y="308" fill="#34d399" font-size="11" font-weight="bold" text-anchor="middle">BOIA DI1: OK</text>
+      <g id="grp-b1">
+        <rect x="355" y="150" width="70" height="8" rx="2" fill="#475569"/>
+        <rect x="395" y="80" width="32" height="24" rx="2" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+        <circle cx="390" cy="115" r="36" fill="#0f172a" stroke="#64748b" stroke-width="4"/>
+        <circle cx="390" cy="115" r="24" fill="#060a11" stroke="#334155" stroke-width="2"/>
+        <g id="svg-rot1">
+          <line x1="390" y1="93" x2="390" y2="137" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
+          <line x1="368" y1="115" x2="412" y2="115" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
+          <line x1="374" y1="99" x2="406" y2="131" stroke="#0284c7" stroke-width="3" stroke-linecap="round"/>
+          <line x1="374" y1="131" x2="406" y2="99" stroke="#0284c7" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="390" cy="115" r="7" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+        </g>
+        <text x="390" y="68" fill="#f8fafc" font-size="12" font-weight="800" text-anchor="middle">BOMBA 01</text>
+        <rect id="tag-bg-b1" x="352" y="164" width="76" height="18" rx="4" fill="#1e293b"/>
+        <text id="tag-txt-b1" x="390" y="177" fill="#94a3b8" font-size="10" font-weight="800" text-anchor="middle">PARADA</text>
+      </g>
+      <g id="grp-b2">
+        <rect x="355" y="300" width="70" height="8" rx="2" fill="#475569"/>
+        <rect x="395" y="230" width="32" height="24" rx="2" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+        <circle cx="390" cy="265" r="36" fill="#0f172a" stroke="#64748b" stroke-width="4"/>
+        <circle cx="390" cy="265" r="24" fill="#060a11" stroke="#334155" stroke-width="2"/>
+        <g id="svg-rot2">
+          <line x1="390" y1="243" x2="390" y2="287" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
+          <line x1="368" y1="265" x2="412" y2="265" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
+          <line x1="374" y1="249" x2="406" y2="281" stroke="#0284c7" stroke-width="3" stroke-linecap="round"/>
+          <line x1="374" y1="281" x2="406" y2="249" stroke="#0284c7" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="390" cy="265" r="7" fill="#1e293b" stroke="#94a3b8" stroke-width="2"/>
+        </g>
+        <text x="390" y="218" fill="#f8fafc" font-size="12" font-weight="800" text-anchor="middle">BOMBA 02</text>
+        <rect id="tag-bg-b2" x="352" y="314" width="76" height="18" rx="4" fill="#1e293b"/>
+        <text id="tag-txt-b2" x="390" y="327" fill="#94a3b8" font-size="10" font-weight="800" text-anchor="middle">PARADA</text>
+      </g>
+      <rect x="642" y="51" width="146" height="218" rx="10" fill="url(#tankShell)" stroke="#475569" stroke-width="2"/>
+      <g clip-path="url(#clipSup)">
+        <rect id="svg-wsup" x="646" y="170" width="138" height="95" fill="url(#waterGrad)"/>
+        <line id="svg-linesup" x1="646" y1="170" x2="784" y2="170" stroke="#bae6fd" stroke-width="2"/>
+      </g>
+      <line x1="662" y1="75" x2="662" y2="245" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 6"/>
+      <text x="715" y="38" fill="#94a3b8" font-size="11" font-weight="bold" text-anchor="middle">CAIXA SUPERIOR</text>
+      <text id="svg-pct-sup" x="715" y="170" fill="#ffffff" font-size="30" font-weight="900" text-anchor="middle" style="text-shadow:0 2px 8px #000">45%</text>
+      <text id="svg-l-sup" x="715" y="198" fill="#e0f2fe" font-size="13" font-weight="700" text-anchor="middle"></text>
+      <text id="svg-di2" x="715" y="288" fill="#94a3b8" font-size="11" font-weight="bold" text-anchor="middle">BOIA DI2: DESLIGADA</text>
+    </svg>
+    </div>
+    <div class="pumps-telemetry">
+      <div class="motor-panel" id="mp-b1">
+        <div class="mp-top"><span class="mp-title">Conjunto Motobomba 01</span><span class="pill" id="mp-st-b1">PARADA</span></div>
+        <div class="mp-grid">
+          <div class="mp-stat"><small>CORRENTE</small><b id="c-b1">--</b></div>
+          <div class="mp-stat"><small>HORÍMETRO</small><b id="h-b1">0.00 h</b></div>
+          <div class="mp-stat"><small>PARTIDAS</small><b id="p-b1">0</b></div>
+        </div>
+        <div class="mp-extra" id="x-b1"></div>
+      </div>
+      <div class="motor-panel" id="mp-b2">
+        <div class="mp-top"><span class="mp-title">Conjunto Motobomba 02</span><span class="pill" id="mp-st-b2">PARADA</span></div>
+        <div class="mp-grid">
+          <div class="mp-stat"><small>CORRENTE</small><b id="c-b2">--</b></div>
+          <div class="mp-stat"><small>HORÍMETRO</small><b id="h-b2">0.00 h</b></div>
+          <div class="mp-stat"><small>PARTIDAS</small><b id="p-b2">0</b></div>
+        </div>
+        <div class="mp-extra" id="x-b2"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== EVENTOS ===== -->
+  <div class="view" id="v-eventos">
+    <div class="sec-title"><span>Histórico de eventos (gravado na placa)</span><button class="ctrl" style="padding:5px 10px;font-size:10px;" onclick="limparEventos()">Limpar</button></div>
+    <div id="ev-lista" style="color:var(--muted);font-size:13px;">Carregando...</div>
+  </div>
+
+  <!-- ===== CONFIGURAÇÃO ===== -->
+  <div class="view" id="v-config">
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Tudo aqui fica gravado na placa. Sem internet ela continua funcionando com esta configuração.</p>
+    <div class="cfg-sec">
+      <h3>Geral</h3>
+      <label class="lb">Nome do sistema / cliente</label><input id="c-nome" class="in">
+    </div>
+    <div class="cfg-sec">
+      <h3>Controle</h3>
+      <p class="hint">Níveis em % valem quando houver sensor RS485 de nível. Sem sensor, a placa usa as boias.</p>
+      <div class="g2">
+        <div><label class="lb">Liga bomba (caixa ≤ %)</label><input id="c-liga" class="in" type="number"></div>
+        <div><label class="lb">Desliga bomba (caixa ≥ %)</label><input id="c-desliga" class="in" type="number"></div>
+        <div><label class="lb">Bloqueia (cisterna &lt; %)</label><input id="c-cistMin" class="in" type="number"></div>
+        <div><label class="lb">Libera (cisterna ≥ %)</label><input id="c-cistVolta" class="in" type="number"></div>
+        <div><label class="lb">Sobrecorrente (A, 0 = off)</label><input id="c-corrMax" class="in" type="number" step="0.1"></div>
+        <div><label class="lb">Corrente mínima / seco (A, 0 = off)</label><input id="c-corrSeco" class="in" type="number" step="0.1"></div>
+        <div><label class="lb">Espera retorno contator (s, 0 = off)</label><input id="c-tRetorno" class="in" type="number"></div>
+      </div>
+      <label class="chk"><input id="c-buzzer" type="checkbox"> Bipar o buzzer da placa em alarme crítico</label>
+    </div>
+    <div class="cfg-sec">
+      <h3>Entradas digitais (DI1 a DI8)</h3>
+      <p class="hint">Dê um nome e escolha a função de cada entrada. "Inverter" serve para contato normalmente fechado.</p>
+      <div id="c-di"></div>
+    </div>
+    <div class="cfg-sec">
+      <h3>Sensores RS485 (Modbus RTU)</h3>
+      <p class="hint">Todos no mesmo par A/B, cada um com um endereço diferente. Registro, formato e escala estão no manual do aparelho.</p>
+      <label class="lb">Velocidade do barramento</label>
+      <div class="g2"><div>
+      <select id="c-baud" class="in"><option>1200</option><option>2400</option><option>4800</option><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option></select></div>
+      <div><select id="c-serFmt" class="in"><option>8N1</option><option>8E1</option><option>8O1</option><option>8N2</option></select></div></div>
+      <div id="c-sens"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <select id="c-modelo" class="in" style="flex:1;min-width:180px;margin-top:0;">
+          <option value="nivel_m">Sonda de nível (metros)</option>
+          <option value="nivel_pct">Sonda de nível (%)</option>
+          <option value="pressao">Transdutor de pressão (bar)</option>
+          <option value="corrente">Medidor de corrente / energia</option>
+          <option value="inversor">Inversor (frequência)</option>
+          <option value="generico">Outro sensor</option>
+        </select>
+        <button onclick="addSensor()">＋ Adicionar sensor</button>
+      </div>
+      <div class="scard" style="margin-top:14px;border-color:#0369a1;">
+        <b style="color:#38bdf8;">🔍 Testar comunicação (descobrir registros)</b>
+        <p class="hint">Lê o aparelho na hora. Compare os valores com o número do visor: ex. visor 1.25 e valor 125 → esse é o registro, escala 0.01.</p>
+        <div class="g3"><div><label class="lb">Endereço</label><input id="sc-id" class="in" type="number" value="1"></div>
+          <div><label class="lb">Função</label><select id="sc-fc" class="in"><option value="3">03 Holding</option><option value="4">04 Input</option></select></div>
+          <div><label class="lb">Velocidade</label><select id="sc-baud" class="in"><option value="0">a da config</option><option>1200</option><option>2400</option><option>4800</option><option>9600</option><option>19200</option><option>38400</option></select></div></div>
+        <label class="lb">Formato (paridade)</label><select id="sc-fmt" class="in"><option value="-1">o da config</option><option value="0">8N1</option><option value="1">8E1</option><option value="2">8O1</option><option value="3">8N2</option></select>
+        <div class="g2"><div><label class="lb">Registro inicial</label><input id="sc-ini" class="in" type="number" value="0"></div>
+          <div><label class="lb">Quantidade (máx 40)</label><input id="sc-qtd" class="in" type="number" value="20"></div></div>
+        <div class="btn-row" style="grid-template-columns:1fr 1fr;margin-top:10px;">
+          <button onclick="varrer('regs')">Ler registros</button>
+          <button onclick="varrer('ids')">Procurar endereço (1–64)</button>
+        </div>
+        <button class="btn-start" style="width:100%;margin-top:10px;" onclick="varrer('auto')">🔎 Busca automática (todas as velocidades e formatos)</button>
+        <div id="sc-res" style="margin-top:10px;font-size:13px;"></div>
+      </div>
+    </div>
+    <div class="cfg-sec">
+      <h3>Alarmes no celular</h3>
+      <label class="lb">Endereço do carteiro de notificações (Cloudflare)</label><input id="c-pushUrl" class="in" placeholder="https://recalque-alertas.SEU-USUARIO.workers.dev" autocapitalize="off">
+      <label class="lb">Link do painel remoto (abre ao tocar no alarme)</label><input id="c-link" class="in" placeholder="https://usuario.github.io/repositorio/" autocapitalize="off">
+      <label class="lb">Pushover — User Key (sua chave de usuário)</label><input id="c-poUser" class="in" autocapitalize="off" autocorrect="off" placeholder="u...">
+      <label class="lb">Pushover — API Token do aplicativo</label><input id="c-poToken" class="in" type="password" autocapitalize="off" autocorrect="off" placeholder="a...">
+      <label class="chk"><input id="c-poEmerg" type="checkbox"> Alarme crítico em modo emergência (toca e repete até confirmar)</label>
+      <label class="lb">Telegram para ligação (opcional, CallMeBot)</label><input id="c-tg" class="in" autocapitalize="off">
+      <label class="chk"><input id="c-ligar" type="checkbox"> Ligar no Telegram em alarme crítico</label>
+      <label class="lb">Tópico ntfy (opcional)</label><input id="c-ntfy" class="in" autocapitalize="off">
+    </div>
+    <div class="cfg-sec only-local">
+      <h3>Rede e nuvem (só pelo painel local)</h3>
+      <div class="g2">
+        <div><label class="lb">Wi-Fi (nome)</label><input id="c-ssid" class="in" autocapitalize="off"></div>
+        <div><label class="lb">Wi-Fi (senha)</label><input id="c-wpass" class="in" type="password"></div>
+      </div>
+      <label class="chk"><input id="c-eth" type="checkbox"> Usar cabo de rede (Ethernet) quando conectado</label>
+      <label class="lb">Senha da rede própria da placa (mín. 8)</label><input id="c-apPass" class="in" type="password">
+      <div class="g2">
+        <div><label class="lb">Broker MQTT</label><input id="c-mqHost" class="in" autocapitalize="off"></div>
+        <div><label class="lb">Porta (TLS)</label><input id="c-mqPort" class="in" type="number"></div>
+        <div><label class="lb">Usuário MQTT</label><input id="c-mqUser" class="in" autocapitalize="off"></div>
+        <div><label class="lb">Senha MQTT</label><input id="c-mqPass" class="in" type="password"></div>
+      </div>
+      <label class="lb">Tópico base da placa</label><input id="c-mqBase" class="in" autocapitalize="off">
+    </div>
+    <button class="btn-start" style="width:100%;" onclick="salvarConfig()">💾 Salvar configuração na placa</button>
+    <p id="c-msg" class="msg"></p>
+  </div>
+
+  <!-- ===== SISTEMA ===== -->
+  <div class="view" id="v-sistema">
+    <div class="cfg-sec only-remote">
+      <h3>Notificações neste aparelho</h3>
+      <p class="hint">Recebe os alarmes mesmo com o painel fechado. No iPhone, primeiro adicione este painel à Tela de Início (Compartilhar → Adicionar à Tela de Início) e abra pelo ícone.</p>
+      <button class="btn-start" style="width:100%;" onclick="ativarPush()">🔔 Ativar notificações neste aparelho</button>
+      <p id="push-msg" class="msg" style="color:#94a3b8;"></p>
+    </div>
+    <div class="cfg-sec ctrl">
+      <h3>Testar alarmes</h3>
+      <div class="btn-row" style="grid-template-columns:1fr 1fr;">
+        <button onclick="cmd('teste',1)">🔔 Testar notificação</button>
+        <button onclick="cmd('teste',2)">🚨 Testar alarme crítico</button>
+      </div>
+    </div>
+    <div class="cfg-sec ctrl">
+      <h3>Atualização de firmware</h3>
+      <p class="hint">Versão na placa: <b id="fw-ver" style="color:#38bdf8;">--</b></p>
+      <div class="only-local"><a href="/update" class="pill ota" style="display:inline-flex;padding:10px 14px;">⬆ Enviar firmware.bin (rede local)</a></div>
+      <div class="only-remote">
+        <p class="hint">Envie o .bin novo para o mesmo repositório do GitHub deste painel e confirme o nome. As bombas param por cerca de 1 minuto.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <input id="ota-arq" class="in" style="flex:1;min-width:160px;margin-top:0;" value="firmware.bin" autocapitalize="off">
+          <button class="btn-start" onclick="pedirOta()">⬆ Atualizar</button>
+        </div>
+        <div id="ota-conf" style="display:none;margin-top:12px;padding:12px;border:1px solid #f59e0b;border-radius:8px;background:rgba(245,158,11,0.1);">
+          <p style="font-size:13px;margin-bottom:10px;">Atualizar a placa com <b id="ota-nome"></b>? As bombas param até a placa reiniciar.</p>
+          <div class="btn-row" style="grid-template-columns:1fr 1fr;"><button class="btn-stop" onclick="confirmarOta()">Sim, atualizar</button><button onclick="document.getElementById('ota-conf').style.display='none'">Cancelar</button></div>
+        </div>
+        <p id="ota-st" class="msg" style="color:#94a3b8;">Status: --</p>
+      </div>
+    </div>
+    <div class="cfg-sec">
+      <h3>Informações</h3>
+      <div id="info" style="font-size:13px;line-height:1.8;font-family:monospace;color:#cbd5e1;">--</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DIs e sensores (aba Painel) ===== -->
+<div class="card" id="card-di">
+  <div class="sec-title"><span>Entradas digitais</span></div>
+  <div class="di-grid" id="di-grid"></div>
+</div>
+<div class="card" id="card-sens">
+  <div class="sec-title"><span>Sensores RS485</span><button class="ctrl" style="padding:5px 10px;font-size:10px;" onclick="cmd('sim485',1)">Alternar contingência</button></div>
+  <div id="sens-lista"></div>
+</div>
+<div class="card ctrl" id="card-modo">
+  <div class="sec-title"><span>Seletor de Modo Automático</span></div>
+  <div class="btn-row">
+    <button id="m-0" onclick="cmd('modo',0)">Alternância Ciclo</button>
+    <button id="m-1" onclick="cmd('modo',1)">Por Horímetro</button>
+    <button id="m-2" onclick="cmd('modo',2)">Principal / Reserva</button>
+    <button id="m-3" onclick="cmd('modo',3)">Modo Manual</button>
+  </div>
+</div>
+<div class="card ctrl" id="card-prio">
+  <div class="sec-title"><span>Prioridade e Habilitação</span></div>
+  <div class="btn-row">
+    <button id="sel-p1" onclick="cmd('princ',1)">B1 Principal</button>
+    <button id="sel-p2" onclick="cmd('princ',2)">B2 Principal</button>
+    <button id="perm-1" onclick="cmd('perm',1)">Habilita B1</button>
+    <button id="perm-2" onclick="cmd('perm',2)">Habilita B2</button>
+  </div>
+</div>
+<div class="card ctrl" id="card-man">
+  <div class="sec-title"><span>Acionamento Manual Direto</span></div>
+  <div class="btn-row">
+    <button class="btn-start" onclick="cmd('man',1)">▶ Ligar Bomba 1</button>
+    <button class="btn-start" onclick="cmd('man',2)">▶ Ligar Bomba 2</button>
+    <button class="btn-stop" onclick="cmd('man',0)">■ Parar Todas</button>
+    <button onclick="cmd('reset',1)">↻ Reset Falhas</button>
+  </div>
+</div>
+</div>
+
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js" async></script>
+<script>
+// =====================================================================
+//  Transporte: LOCAL (http na placa) ou REMOTO (MQTT pela nuvem)
+// =====================================================================
+const LOCAL = location.protocol === 'http:' && !new URLSearchParams(location.search).has('remoto');
+const modos = ["Ciclo", "Horímetro", "Princ/Reserva", "Manual"];
+const FUNC_DI = {livre:'Livre / monitorar', boia_inf:'Boia cisterna', boia_sup:'Boia caixa superior', termico_b1:'Térmico bomba 1', termico_b2:'Térmico bomba 2', retorno_b1:'Retorno contator B1', retorno_b2:'Retorno contator B2', falta_fase:'Falta de fase', emergencia:'Parada de emergência', nivel_max:'Nível máximo caixa'};
+const TIPO_S = {generico:'Genérico', nivel_inf:'Nível cisterna', nivel_sup:'Nível caixa superior', pressao:'Pressão', corrente_b1:'Corrente bomba 1', corrente_b2:'Corrente bomba 2', tensao:'Tensão', temperatura:'Temperatura', freq_b1:'Frequência bomba 1', freq_b2:'Frequência bomba 2', potencia_b1:'Potência bomba 1', potencia_b2:'Potência bomba 2'};
+const FMTS = {u16:'16 bits sem sinal', s16:'16 bits com sinal', u32:'32 bits sem sinal', s32:'32 bits com sinal', f32:'32 bits float'};
+let cli = null, base = '', ultimoDado = 0, cfgAtual = null, cfgEditando = false, sensEdit = [];
+const $ = id => document.getElementById(id);
+function esc(t){ return String(t ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function lerCfgLocal(){ try { return JSON.parse(localStorage.getItem('recalqueCfg') || '{}'); } catch(e){ return {}; } }
+function salvarCfgLocal(c){ try { localStorage.setItem('recalqueCfg', JSON.stringify(c)); } catch(e){} }
+function pill(id, ok, txt){ const e=$(id); if(!e) return; e.className = e.className.replace(/\b(ok|err)\b/g,'').trim() + (ok===null?'':(ok?' ok':' err')); e.innerHTML=`<span class="led"></span>${txt}`; }
+
+function aba(v){
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.v === v));
+  document.querySelectorAll('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v));
+  const painel = v === 'painel';
+  ['card-di','card-sens','card-modo','card-prio','card-man'].forEach(id => $(id).style.display = painel ? '' : 'none');
+  if (v === 'config') preencherConfig();
+  if (v === 'eventos' && LOCAL) carregarEventosLocal();
+}
+
+// ---------------- comandos ----------------
+function cmd(t, v){
+  if (document.body.classList.contains('viewer')) return;
+  if (LOCAL) { fetch(`/api/cmd?t=${t}&v=${v}`).then(atualizarLocal); return; }
+  if (!cli || !cli.connected) return;
+  cli.publish(base + '/cmd/' + t, String(v), { qos: 1 });
+  setTimeout(avisarVendo, 300);
+}
+function limparEventos(){ cmd('limpar_eventos', 1); setTimeout(()=>LOCAL&&carregarEventosLocal(), 600); }
+
+// ---------------- LOCAL ----------------
+function atualizarLocal(){
+  return fetch('/api/status', {cache:'no-store'}).then(r => r.json()).then(d => { ultimoDado = Date.now(); render(d); pill('bdg-placa', true, 'PLACA OK'); })
+    .catch(() => pill('bdg-placa', false, 'SEM RESPOSTA'));
+}
+function carregarConfigLocal(){ return fetch('/api/config').then(r => r.json()).then(c => { cfgAtual = c; aplicarNome(); }); }
+function carregarEventosLocal(){ fetch('/api/eventos').then(r => r.json()).then(renderEventos).catch(()=>{}); }
+
+// ---------------- REMOTO ----------------
+function entrar(){
+  const c = {
+    host: $('f-host').value.trim().replace(/^.*:\/\//,'').replace(/[:\/].*$/,''),
+    port: parseInt($('f-port').value, 10) || 8084,
+    user: $('f-user').value.trim(), pass: $('f-pass').value,
+    base: $('f-base').value.trim().replace(/\/+$/,''), viewer: $('f-viewer').checked
+  };
+  if (!c.host || !c.user || !c.pass || !c.base) { $('login-msg').innerText = "Preencha todos os campos."; return; }
+  salvarCfgLocal(c); conectar(c);
+}
+function sair(){ if (cli) cli.end(true); const c = lerCfgLocal(); delete c.pass; salvarCfgLocal(c); location.reload(); }
+function conectar(c){
+  if (typeof mqtt === 'undefined') { setTimeout(() => conectar(c), 300); return; }
+  base = c.base;
+  document.body.classList.toggle('viewer', !!c.viewer);
+  $('login-msg').style.color = '#8b9bb4'; $('login-msg').innerText = "Conectando...";
+  if (cli) cli.end(true);
+  cli = mqtt.connect(`wss://${c.host}:${c.port || 8084}/mqtt`, {
+    username: c.user, password: c.pass, clientId: 'painel-' + Math.random().toString(16).slice(2, 10),
+    reconnectPeriod: 3000, connectTimeout: 10000, clean: true
+  });
+  cli.on('connect', () => {
+    $('login').style.display = 'none'; $('app').style.display = 'block';
+    pill('bdg-nuvem', true, 'NUVEM OK');
+    cli.subscribe(['status','online','ota','versao','evento','eventos','config','config_resp','scan_resp'].map(t => base + '/' + t), { qos: 1 });
+    avisarVendo();
+  });
+  cli.on('message', (t, m) => {
+    const txt = m.toString(), k = t.slice(base.length + 1);
+    if (k === 'online') { pill('bdg-placa', txt === '1', txt === '1' ? 'PLACA ONLINE' : 'PLACA OFFLINE'); return; }
+    if (k === 'versao') { $('fw-ver').innerText = txt; return; }
+    if (k === 'ota') { const e = $('ota-st'); e.innerText = 'Status: ' + txt; e.style.color = txt.startsWith('ERRO') ? '#f87171' : (txt.startsWith('OK') ? '#34d399' : '#fbbf24'); return; }
+    if (k === 'config_resp') { const ok = txt.startsWith('SALVO'); $('c-msg').style.color = ok ? '#34d399' : '#f87171'; $('c-msg').innerText = txt; cfgEditando = false; return; }
+    try {
+      const d = JSON.parse(txt);
+      if (k === 'status') { ultimoDado = Date.now(); render(d); }
+      else if (k === 'eventos') renderEventos(d);
+      else if (k === 'scan_resp') mostrarScan(d);
+      else if (k === 'config') { cfgAtual = d; aplicarNome(); if ($('v-config').classList.contains('on') && !cfgEditando) preencherConfig(); }
+    } catch(e) {}
+  });
+  cli.on('offline', () => pill('bdg-nuvem', false, 'NUVEM OFF'));
+  cli.on('reconnect', () => pill('bdg-nuvem', null, 'RECONECTANDO'));
+  cli.on('error', e => { $('login-msg').style.color = '#f87171'; $('login-msg').innerText = /auth|Not authorized|Bad user/i.test(e.message) ? "Usuário ou senha incorretos." : ("Erro: " + e.message); });
+}
+function avisarVendo(){ if (!LOCAL && cli && cli.connected) { cli.publish(base + '/ver', '1'); if (!document.body.classList.contains('viewer')) cli.publish(base + '/cmd/ver', '1'); } }   // cmd/ver: compatível com firmware 7.x
+function voltarAoApp(){
+  if (LOCAL) { atualizarLocal(); return; }
+  if (!cli) return;
+  if (!cli.connected) { pill('bdg-nuvem', null, 'RECONECTANDO'); cli.reconnect(); } else avisarVendo();
+}
+
+// ---------------- RENDER ----------------
+function aplicarNome(){ if (cfgAtual && cfgAtual.nome) { $('t-nome').innerText = cfgAtual.nome; document.title = cfgAtual.nome; } }
+
+function render(d){
+  if (d.nome) $('t-nome').innerText = d.nome;
+  const rede = {cabo:'CABO', wifi:'WI-FI' + (d.rssi ? ' ' + d.rssi + 'dBm' : ''), ap:'REDE PRÓPRIA', off:'SEM REDE'}[d.rede] || '--';
+  $('sub-info').innerText = `${d.hora || '--'} | ${rede} | IP ${d.ip || '--'} | ${LOCAL ? 'LOCAL' : 'REMOTO'} | UPTIME ${Math.floor((d.uptime||0)/3600)}h${String(Math.floor((d.uptime||0)%3600/60)).padStart(2,'0')}`;
+  $('fw-ver').innerText = d.fw || '--';
+  $('k-dem').innerText = d.demanda ? "ATIVA" : "STAND-BY";
+  $('k-bat').innerText = d.ativa == 0 ? "NENHUMA" : "BOMBA 0" + d.ativa;
+  $('k-prox').innerText = d.prox == 0 ? "NENHUMA" : "BOMBA 0" + d.prox;
+  $('k-modo').innerText = modos[d.modo];
+
+  const nivel = (id, v, topo, litros) => {
+    const ok = v >= 0, h = ((ok ? v : 0) / 100) * 210, y = topo - h;
+    $('svg-w' + id).setAttribute('y', y); $('svg-w' + id).setAttribute('height', h);
+    $('svg-line' + id).setAttribute('y1', y); $('svg-line' + id).setAttribute('y2', y);
+    $('svg-pct-' + id).textContent = ok ? v + "%" : "--";
+    $('svg-l-' + id).textContent = (ok && litros != null) ? litros.toLocaleString('pt-BR') + ' L' : '';
+  };
+  nivel('inf', d.nInf, 285, d.lInf); nivel('sup', d.nSup, 265, d.lSup);
+  const bi = $('svg-di1'), bs = $('svg-di2');
+  bi.textContent = d.boiaInf < 0 ? "SEM BOIA" : (d.boiaInf ? "BOIA: COM ÁGUA" : "BOIA: SECO!");
+  bi.setAttribute('fill', d.boiaInf < 0 ? "#64748b" : (d.boiaInf ? "#34d399" : "#f87171"));
+  bs.textContent = d.boiaSup < 0 ? "SEM BOIA" : (d.boiaSup ? "BOIA: PEDINDO ÁGUA" : "BOIA: CHEIA");
+  bs.setAttribute('fill', d.boiaSup < 0 ? "#64748b" : (d.boiaSup ? "#38bdf8" : "#94a3b8"));
+
+  atualizaBomba(1, d.b1); atualizaBomba(2, d.b2);
+  setFluxo('flow-suc1', 'flow-rec1', d.b1.rod); setFluxo('flow-suc2', 'flow-rec2', d.b2.rod);
+
+  for (let i = 0; i < 4; i++) $('m-' + i).className = (d.modo == i) ? 'sel-blue' : '';
+  $('sel-p1').className = d.princ == 1 ? 'sel-blue' : ''; $('sel-p2').className = d.princ == 2 ? 'sel-blue' : '';
+  $('perm-1').className = d.b1.perm ? 'sel-amber' : ''; $('perm-2').className = d.b2.perm ? 'sel-amber' : '';
+
+  const temSens = (d.sens || []).length > 0;
+  pill('bdg-485', temSens ? d.rs485 : null, !temSens ? 'RS485 --' : (d.conting ? 'CONTINGÊNCIA' : (d.rs485 ? 'RS485 OK' : 'RS485 FALHA')));
+
+  // alarmes ativos
+  const al = [];
+  if (d.emerg) al.push('⛔ Parada de emergência acionada');
+  if (d.faltaFase) al.push('⚡ Falta de fase — bombas desligadas');
+  if (d.b1.falha) al.push('🔴 Bomba 1 em falha: ' + d.b1.motivo);
+  if (d.b2.falha) al.push('🔴 Bomba 2 em falha: ' + d.b2.motivo);
+  if (d.alInf) al.push('💧 Cisterna em nível mínimo — bombas bloqueadas');
+  if (d.semSup) al.push('❓ Sem sensor nem boia da caixa superior — bombas não ligam');
+  if (temSens && !d.rs485 && !d.conting) al.push('📡 Sensor RS485 sem comunicação');
+  if (d.modo == 3) al.push('🔧 Modo manual — automático desligado');
+  $('banner').innerHTML = al.map(a => `<div>${esc(a)}</div>`).join('');
+  $('banner').style.display = al.length ? 'block' : 'none';
+
+  // DIs
+  $('di-grid').innerHTML = (d.di || []).map((x, i) => {
+    const [txt, cls] = estadoDI(x.f, x.v);
+    return `<div class="di ${cls}"><small>DI${i+1} • ${esc(FUNC_DI[x.f] || x.f)}</small><b>${esc(x.n)}</b><span>${txt}</span></div>`;
+  }).join('');
+  // sensores
+  $('sens-lista').innerHTML = temSens ? d.sens.map(s => `<div class="srow"><span>${esc(s.n)}<br><small style="color:var(--muted);font-size:11px;">${esc(TIPO_S[s.t] || s.t)}</small></span>${s.ok ? `<b>${Number(s.v).toLocaleString('pt-BR',{maximumFractionDigits:2})} ${esc(s.u)}</b>` : '<span class="bad">SEM COMUNICAÇÃO</span>'}</div>`).join('')
+                                     : '<p style="color:var(--muted);font-size:13px;">Nenhum sensor cadastrado. Adicione em Configuração → Sensores RS485.</p>';
+  $('info').innerHTML = `Firmware: ${esc(d.fw)}<br>Tópico base: ${esc(d.base)}<br>Rede: ${esc(rede)}<br>IP: ${esc(d.ip)}<br>Nuvem (MQTT): ${d.mqtt ? 'conectada' : 'desconectada'}`;
+}
+
+function estadoDI(f, v){
+  switch (f) {
+    case 'boia_inf': return v ? ['COM ÁGUA','ok'] : ['SECO','alm'];
+    case 'boia_sup': return v ? ['PEDINDO ÁGUA','act'] : ['CHEIA','neu'];
+    case 'termico_b1': case 'termico_b2': return v ? ['ATUADO','alm'] : ['NORMAL','ok'];
+    case 'retorno_b1': case 'retorno_b2': return v ? ['LIGADO','act'] : ['DESLIGADO','neu'];
+    case 'falta_fase': return v ? ['FALTA DE FASE','alm'] : ['FASES OK','ok'];
+    case 'emergencia': return v ? ['ACIONADA','alm'] : ['NORMAL','ok'];
+    case 'nivel_max': return v ? ['NÍVEL MÁXIMO','act'] : ['NORMAL','neu'];
+    default: return v ? ['FECHADO','act'] : ['ABERTO','neu'];
+  }
+}
+
+function setFluxo(a, b, on){ [a, b].forEach(id => { const e = $(id); e.setAttribute('opacity', on ? '1' : '0.15'); e.setAttribute('class', on ? 'pipe-flow' : ''); }); }
+function atualizaBomba(n, b){
+  $('mp-b' + n).className = "motor-panel " + (b.falha ? "fault" : (b.rod ? "active" : ""));
+  const st = $('mp-st-b' + n);
+  st.className = "pill " + (b.falha ? "err" : (b.rod ? "ok" : ""));
+  st.innerHTML = `<span class="led"></span>${b.falha ? "FALHA" : (!b.perm ? "BLOQUEADA" : (b.rod ? "OPERANDO" : "PARADA"))}`;
+  $('svg-rot' + n).setAttribute('class', b.rod ? 'spin-b' + n : '');
+  $('tag-bg-b' + n).setAttribute('fill', b.falha ? '#991b1b' : (b.rod ? '#065f46' : '#1e293b'));
+  $('tag-txt-b' + n).setAttribute('fill', b.falha ? '#fca5a5' : (b.rod ? '#34d399' : '#94a3b8'));
+  $('tag-txt-b' + n).textContent = b.falha ? "FALHA" : (b.rod ? "LIGADA" : "PARADA");
+  $('c-b' + n).innerText = ('corr' in b) ? (b.corr === null ? 'S/ COM.' : Number(b.corr).toFixed(1) + ' A') : 'sem medidor';
+  $('h-b' + n).innerText = Number(b.hor).toFixed(2) + " h";
+  $('p-b' + n).innerText = b.part;
+  const x = [];
+  if ('freq' in b) x.push('Freq: ' + (b.freq === null ? '--' : Number(b.freq).toFixed(1) + ' Hz'));
+  if ('pot' in b) x.push('Pot: ' + (b.pot === null ? '--' : Number(b.pot).toFixed(2) + ' kW'));
+  $('x-b' + n).innerText = x.join('  •  ');
+}
+
+function renderEventos(lista){
+  if (!Array.isArray(lista) || !lista.length) { $('ev-lista').innerHTML = 'Nenhum evento registrado.'; return; }
+  $('ev-lista').innerHTML = lista.map(e => {
+    const dt = e.ts > 1700000000 ? new Date(e.ts * 1000).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '--';
+    return `<div class="ev p${e.p}"><time>${dt}</time><span>${esc(e.t)}</span></div>`;
+  }).join('');
+}
+
+// ---------------- CONFIGURAÇÃO ----------------
+function opts(map, sel){ return Object.entries(map).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join(''); }
+
+function preencherConfig(){
+  if (!cfgAtual) { $('c-msg').style.color = '#94a3b8'; $('c-msg').innerText = 'Carregando configuração da placa...'; if (LOCAL) carregarConfigLocal().then(preencherConfig); return; }
+  const c = cfgAtual, k = c.ctrl || {}, a = c.alarmes || {}, r = c.rede || {};
+  $('c-nome').value = c.nome || '';
+  ['liga','desliga','cistMin','cistVolta','corrMax','corrSeco','tRetorno'].forEach(n => $('c-' + n).value = k[n] ?? '');
+  $('c-buzzer').checked = !!k.buzzer;
+  $('c-di').innerHTML = (c.di || []).map((x, i) => `<div class="dirow"><b style="color:#38bdf8;font-size:12px;">DI${i+1}</b>
+      <input class="in" id="di-n${i}" value="${esc(x.n)}" maxlength="23">
+      <select class="in fsel" id="di-f${i}">${opts(FUNC_DI, x.f)}</select>
+      <label class="chk finv" style="margin-top:0;"><input type="checkbox" id="di-i${i}"${x.inv ? ' checked' : ''}> Inverter</label></div>`).join('');
+  $('c-baud').value = String(c.baud || 9600); $('c-serFmt').value = c.serFmt || '8N1';
+  sensEdit = JSON.parse(JSON.stringify(c.sens || []));
+  desenharSensores();
+  ['pushUrl','link','tg','ntfy','poUser','poToken'].forEach(n => $('c-' + n).value = a[n] || '');
+  $('c-ligar').checked = !!a.ligar; $('c-poEmerg').checked = a.poEmerg !== false;
+  if (LOCAL) {
+    $('c-ssid').value = r.ssid || ''; $('c-wpass').value = r.pass || ''; $('c-eth').checked = !!r.eth; $('c-apPass').value = r.apPass || '';
+    $('c-mqHost').value = r.mqHost || ''; $('c-mqPort').value = r.mqPort || 8883; $('c-mqUser').value = r.mqUser || ''; $('c-mqPass').value = r.mqPass || ''; $('c-mqBase').value = r.mqBase || '';
+  }
+  $('c-msg').innerText = '';
+}
+
+function lerSensoresDaTela(){
+  sensEdit = sensEdit.map((s, i) => ({
+    n: $('s-n' + i).value.trim() || 'Sensor', id: +$('s-id' + i).value || 1, reg: +$('s-reg' + i).value || 0, fc: +$('s-fc' + i).value,
+    fmt: $('s-fmt' + i).value, swap: $('s-swap' + i).checked, esc: parseFloat($('s-esc' + i).value) || 1, off: parseFloat($('s-off' + i).value) || 0,
+    u: $('s-u' + i).value.trim(), t: $('s-t' + i).value, alt: parseFloat($('s-alt' + i).value) || 0, vol: parseFloat($('s-vol' + i).value) || 0
+  }));
+}
+
+function desenharSensores(){
+  $('c-sens').innerHTML = sensEdit.map((s, i) => `<div class="scard">
+    <div class="scard-top"><b style="color:#38bdf8;">Sensor ${i+1}</b><button style="padding:5px 10px;font-size:10px;" onclick="remSensor(${i})">✕ Remover</button></div>
+    <div class="g2"><div><label class="lb">Nome</label><input class="in" id="s-n${i}" value="${esc(s.n)}" maxlength="23"></div>
+      <div><label class="lb">O que mede</label><select class="in" id="s-t${i}">${opts(TIPO_S, s.t)}</select></div></div>
+    <div class="g3"><div><label class="lb">Endereço</label><input class="in" id="s-id${i}" type="number" value="${s.id}"></div>
+      <div><label class="lb">Registro</label><input class="in" id="s-reg${i}" type="number" value="${s.reg}"></div>
+      <div><label class="lb">Função</label><select class="in" id="s-fc${i}"><option value="3"${s.fc == 3 ? ' selected' : ''}>03 Holding</option><option value="4"${s.fc == 4 ? ' selected' : ''}>04 Input</option></select></div></div>
+    <div class="g3"><div><label class="lb">Formato</label><select class="in" id="s-fmt${i}">${opts(FMTS, s.fmt)}</select></div>
+      <div><label class="lb">Escala (×)</label><input class="in" id="s-esc${i}" type="number" step="any" value="${s.esc}"></div>
+      <div><label class="lb">Offset (+)</label><input class="in" id="s-off${i}" type="number" step="any" value="${s.off}"></div></div>
+    <div class="g3"><div><label class="lb">Unidade</label><input class="in" id="s-u${i}" value="${esc(s.u)}" maxlength="7" placeholder="m, %, bar, A"></div>
+      <div><label class="lb">Altura útil (m)</label><input class="in" id="s-alt${i}" type="number" step="any" value="${s.alt}"></div>
+      <div><label class="lb">Volume (litros)</label><input class="in" id="s-vol${i}" type="number" step="any" value="${s.vol}"></div></div>
+    <label class="chk"><input type="checkbox" id="s-swap${i}"${s.swap ? ' checked' : ''}> Inverter ordem das palavras (32 bits)</label>
+  </div>`).join('') || '<p class="hint" style="margin-top:10px;">Nenhum sensor cadastrado.</p>';
+}
+
+function addSensor(){
+  lerSensoresDaTela();
+  if (sensEdit.length >= 10) return;
+  const proxId = Math.max(0, ...sensEdit.map(s => s.id)) + 1;
+  const m = $('c-modelo').value;
+  const p = {
+    nivel_m:  {n:'Sonda de nível', t:'nivel_sup', u:'m', esc:0.001, fmt:'u16', alt:1.2, vol:500},
+    nivel_pct:{n:'Sonda de nível', t:'nivel_inf', u:'%', esc:0.1, fmt:'u16', alt:0, vol:0},
+    pressao:  {n:'Pressão recalque', t:'pressao', u:'bar', esc:0.01, fmt:'u16', alt:0, vol:0},
+    corrente: {n:'Corrente bomba 1', t:'corrente_b1', u:'A', esc:0.01, fmt:'u16', alt:0, vol:0},
+    inversor: {n:'Inversor bomba 1', t:'freq_b1', u:'Hz', esc:0.1, fmt:'u16', alt:0, vol:0},
+    generico: {n:'Sensor', t:'generico', u:'', esc:1, fmt:'u16', alt:0, vol:0}
+  }[m];
+  sensEdit.push(Object.assign({id: proxId, reg: 0, fc: 3, off: 0, swap: false}, p));
+  desenharSensores();
+  $('c-msg').style.color = '#fbbf24'; $('c-msg').innerText = 'Confira endereço, registro e escala no manual do aparelho antes de salvar.';
+}
+function remSensor(i){ lerSensoresDaTela(); sensEdit.splice(i, 1); desenharSensores(); }
+
+function salvarConfig(){
+  if (!cfgAtual) return;
+  lerSensoresDaTela();
+  const num = id => parseFloat($(id).value);
+  const nova = {
+    nome: $('c-nome').value.trim() || 'Sistema de Recalque',
+    di: [...Array(8)].map((_, i) => ({ n: $('di-n' + i).value.trim() || 'Entrada ' + (i+1), f: $('di-f' + i).value, inv: $('di-i' + i).checked })),
+    sens: sensEdit, baud: +$('c-baud').value, serFmt: $('c-serFmt').value,
+    ctrl: { liga: num('c-liga'), desliga: num('c-desliga'), cistMin: num('c-cistMin'), cistVolta: num('c-cistVolta'),
+            corrMax: num('c-corrMax') || 0, corrSeco: num('c-corrSeco') || 0, tRetorno: parseInt($('c-tRetorno').value) || 0, buzzer: $('c-buzzer').checked },
+    alarmes: { pushUrl: $('c-pushUrl').value.trim(), link: $('c-link').value.trim(), tg: $('c-tg').value.trim(), ligar: $('c-ligar').checked, ntfy: $('c-ntfy').value.trim(),
+               poUser: $('c-poUser').value.trim(), poToken: $('c-poToken').value.trim(), poEmerg: $('c-poEmerg').checked }
+  };
+  if (!(nova.ctrl.liga < nova.ctrl.desliga)) { $('c-msg').style.color = '#f87171'; $('c-msg').innerText = 'O nível de ligar precisa ser menor que o de desligar.'; return; }
+  const ids = nova.sens.map(s => s.id + ':' + s.reg);
+  if (new Set(ids).size !== ids.length) { $('c-msg').style.color = '#f87171'; $('c-msg').innerText = 'Há dois sensores com o mesmo endereço e registro.'; return; }
+  $('c-msg').style.color = '#fbbf24'; $('c-msg').innerText = 'Salvando na placa...';
+  if (LOCAL) {
+    nova.rede = { ssid: $('c-ssid').value.trim(), pass: $('c-wpass').value, eth: $('c-eth').checked, apPass: $('c-apPass').value,
+                  mqHost: $('c-mqHost').value.trim(), mqPort: +$('c-mqPort').value || 8883, mqUser: $('c-mqUser').value.trim(), mqPass: $('c-mqPass').value, mqBase: $('c-mqBase').value.trim() };
+    fetch('/api/config', { method: 'POST', body: JSON.stringify(nova) }).then(r => r.text()).then(t => {
+      $('c-msg').style.color = t.startsWith('SALVO') ? '#34d399' : '#f87171'; $('c-msg').innerText = t;
+      carregarConfigLocal();
+    }).catch(() => { $('c-msg').style.color = '#f87171'; $('c-msg').innerText = 'Sem resposta da placa.'; });
+  } else {
+    if (!cli || !cli.connected) { $('c-msg').style.color = '#f87171'; $('c-msg').innerText = 'Sem conexão com a nuvem.'; return; }
+    cfgEditando = true;
+    cli.publish(base + '/cmd/config', JSON.stringify(nova), { qos: 1 });
+    setTimeout(() => { if (cfgEditando) { cfgEditando = false; $('c-msg').style.color = '#f87171'; $('c-msg').innerText = 'A placa não confirmou. Ela está online?'; } }, 10000);
+  }
+}
+
+// ---------------- VARREDURA RS485 ----------------
+function mostrarScan(d){
+  const res = $('sc-res');
+  if (!d || !Array.isArray(d.r)) { res.innerHTML = '<span style="color:#f87171">Sem resposta da placa.</span>'; return; }
+  if (d.modo === 'auto') {
+    const ach = d.r.filter(x => x.id), lixo = d.r.filter(x => x.lixo);
+    if (ach.length) {
+      const x = ach[0];
+      res.innerHTML = `<b style="color:#34d399">✅ O aparelho respondeu! Endereço ${x.id}, ${x.baud} ${x.fmt}${x.exc ? ' (respondeu "registro inválido": a comunicação está OK, falta achar o registro certo)' : ', valor ' + x.v}.</b><br>` +
+        `<button style="margin-top:8px;" onclick="usarSerial(${x.baud},'${x.fmt}',${x.id})">Usar essa velocidade/formato</button>`;
+    } else if (lixo.length) {
+      res.innerHTML = '<b style="color:#fbbf24">⚠ Chegaram dados, mas embaralhados em: ' + lixo.map(x => x.baud + ' ' + x.fmt).join(', ') + '.</b><br>O aparelho está falando, mas não em Modbus RTU nesses formatos (pode ser outro protocolo). Peça ao fornecedor o protocolo de comunicação.';
+    } else {
+      res.innerHTML = '<b style="color:#f87171">❌ Nenhuma resposta em nenhuma velocidade/formato (endereços 1 a 10).</b><br>Confira: fios A/B invertidos, borne certo na placa, e se o indicador tem mesmo o módulo RS485 instalado.';
+    }
+    return;
+  }
+  if (d.modo === 'ids') {
+    res.innerHTML = d.r.length ? '<b style="color:#34d399">Responderam: ' + d.r.map(x => 'endereço ' + x.id + (x.exc ? ' (registro inválido, mas comunicou)' : '')).join(', ') + '</b>' : '<span style="color:#f87171">Nenhum endereço respondeu. Inverta A/B, teste outra velocidade ou use a Busca automática.</span>';
+    return;
+  }
+  const ok = d.r.filter(x => x.v !== null).length, exc = d.r.filter(x => x.exc).length;
+  if (!ok) { res.innerHTML = exc ? '<span style="color:#fbbf24">O aparelho respondeu "registro inválido" para todos. A comunicação está OK: tente a outra função (03/04) ou outro registro inicial (ex.: 100, 1000, 4096).</span>' : '<span style="color:#f87171">Nenhum registro respondeu. Tente a outra função (03/04) ou a Busca automática.</span>'; return; }
+  res.innerHTML = '<table style="width:100%;border-collapse:collapse;font-family:monospace;"><tr style="color:var(--muted)"><td>Registro</td><td>Valor</td><td>Com sinal</td></tr>' +
+    d.r.map(x => x.v === null ? `<tr><td>${x.reg}</td><td colspan="2" style="color:#64748b">${x.exc ? 'inválido' : '—'}</td></tr>` :
+      `<tr><td>${x.reg}</td><td style="color:#38bdf8">${x.v}</td><td>${x.v > 32767 ? x.v - 65536 : x.v}</td></tr>`).join('') + '</table>';
+}
+function usarSerial(baud, fmt, id){
+  $('c-baud').value = String(baud); $('c-serFmt').value = fmt; $('sc-id').value = id; $('sc-baud').value = '0'; $('sc-fmt').value = '-1';
+  $('c-msg').style.color = '#fbbf24'; $('c-msg').innerText = 'Velocidade e formato preenchidos. Toque em Salvar e depois use "Ler registros".';
+}
+function varrer(modo){
+  const q = { modo, id: +$('sc-id').value || 1, fc: +$('sc-fc').value, ini: +$('sc-ini').value || 0, qtd: +$('sc-qtd').value || 20, baud: +$('sc-baud').value || 0, fmt: +$('sc-fmt').value };
+  $('sc-res').innerHTML = '<span style="color:#fbbf24">Lendo... ' + (modo === 'ids' ? '(até 15 s)' : modo === 'auto' ? '(até 40 s, aguarde)' : '') + '</span>';
+  if (LOCAL) { fetch('/api/scan?' + new URLSearchParams(q)).then(r => r.json()).then(mostrarScan).catch(() => mostrarScan(null)); return; }
+  if (!cli || !cli.connected) { mostrarScan(null); return; }
+  cli.publish(base + '/cmd/scan', JSON.stringify(q), { qos: 1 });
+}
+
+// ---------------- OTA REMOTO ----------------
+function pedirOta(){
+  const nome = $('ota-arq').value.trim();
+  if (!nome.endsWith('.bin')) { $('ota-st').innerText = 'Status: o arquivo precisa terminar em .bin'; return; }
+  $('ota-nome').innerText = nome; $('ota-conf').style.display = 'block';
+}
+function confirmarOta(){
+  $('ota-conf').style.display = 'none';
+  if (!cli || !cli.connected) return;
+  cli.publish(base + '/cmd/ota', new URL($('ota-arq').value.trim(), location.href).href, { qos: 1 });
+  $('ota-st').innerText = 'Status: comando enviado, aguardando a placa...';
+}
+
+// ---------------- NOTIFICAÇÕES DO APP (Web Push) ----------------
+function b64uParaBytes(s){ const p = '='.repeat((4 - s.length % 4) % 4); const b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, c => c.charCodeAt(0)); }
+async function ativarPush(){
+  const msg = t => { $('push-msg').innerText = t; };
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      msg('Este navegador não aceita notificações. No iPhone: Compartilhar → Adicionar à Tela de Início, e abra o painel pelo ícone.'); return;
+    }
+    const url = cfgAtual && cfgAtual.alarmes && cfgAtual.alarmes.pushUrl;
+    if (!url) { msg('Falta o endereço do carteiro em Configuração → Alarmes no celular.'); return; }
+    const reg = await navigator.serviceWorker.register('sw.js');
+    await navigator.serviceWorker.ready;
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { msg('Permissão negada. Libere as notificações nos ajustes do aparelho.'); return; }
+    msg('Cadastrando este aparelho...');
+    const { publicKey } = await (await fetch(url + '/vapid')).json();
+    let sub = await reg.pushManager.getSubscription();
+    if (sub) { const k = new Uint8Array(sub.options.applicationServerKey || []); if (k.length && btoa(String.fromCharCode(...k)) !== btoa(String.fromCharCode(...b64uParaBytes(publicKey)))) { await sub.unsubscribe(); sub = null; } }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uParaBytes(publicKey) });
+    const r = await fetch(url + '/inscrever', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ base, sub, nome: (navigator.platform || 'aparelho') + ' ' + new Date().toLocaleDateString('pt-BR') }) });
+    if (!r.ok) throw new Error('carteiro respondeu ' + r.status);
+    try { localStorage.setItem('pushOk', base); } catch(e){}
+    msg('✅ Notificações ativadas neste aparelho. Use "Testar notificação" para conferir.');
+  } catch (e) { msg('Erro: ' + e.message); }
+}
+
+// ---------------- INÍCIO ----------------
+setInterval(() => { $('stale').style.display = (ultimoDado && Date.now() - ultimoDado > 10000) ? 'block' : 'none'; }, 2000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) voltarAoApp(); });
+window.addEventListener('pageshow', voltarAoApp);
+window.addEventListener('focus', voltarAoApp);
+window.addEventListener('online', voltarAoApp);
+
+(function iniciar(){
+  if (location.hash === '#config') setTimeout(() => aba('config'), 50);
+  if (LOCAL) {
+    $('app').style.display = 'block';
+    pill('bdg-placa', null, 'CONECTANDO');
+    carregarConfigLocal().catch(()=>{}); atualizarLocal(); carregarEventosLocal();
+    setInterval(atualizarLocal, 1500); setInterval(() => { if ($('v-eventos').classList.contains('on')) carregarEventosLocal(); }, 10000);
+    return;
+  }
+  document.body.classList.add('remote');
+  setInterval(avisarVendo, 20000);
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+  const c = lerCfgLocal();
+  ['host','port','user','base'].forEach(k => { if (c[k]) $('f-' + k).value = c[k]; });
+  $('f-viewer').checked = !!c.viewer;
+  if (c.host && c.user && c.pass && c.base) { $('f-pass').value = c.pass; conectar(c); }
+  else $('login').style.display = 'block';
+})();
+</script>
+</body>
+</html>
