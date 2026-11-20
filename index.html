@@ -322,7 +322,9 @@
       <h3>Sensores RS485 (Modbus RTU)</h3>
       <p class="hint">Todos no mesmo par A/B, cada um com um endereço diferente. Registro, formato e escala estão no manual do aparelho.</p>
       <label class="lb">Velocidade do barramento</label>
-      <select id="c-baud" class="in"><option>2400</option><option>4800</option><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option></select>
+      <div class="g2"><div>
+      <select id="c-baud" class="in"><option>1200</option><option>2400</option><option>4800</option><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option></select></div>
+      <div><select id="c-serFmt" class="in"><option>8N1</option><option>8E1</option><option>8O1</option><option>8N2</option></select></div></div>
       <div id="c-sens"></div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         <select id="c-modelo" class="in" style="flex:1;min-width:180px;margin-top:0;">
@@ -340,13 +342,15 @@
         <p class="hint">Lê o aparelho na hora. Compare os valores com o número do visor: ex. visor 1.25 e valor 125 → esse é o registro, escala 0.01.</p>
         <div class="g3"><div><label class="lb">Endereço</label><input id="sc-id" class="in" type="number" value="1"></div>
           <div><label class="lb">Função</label><select id="sc-fc" class="in"><option value="3">03 Holding</option><option value="4">04 Input</option></select></div>
-          <div><label class="lb">Velocidade</label><select id="sc-baud" class="in"><option value="0">a da config</option><option>2400</option><option>4800</option><option>9600</option><option>19200</option></select></div></div>
+          <div><label class="lb">Velocidade</label><select id="sc-baud" class="in"><option value="0">a da config</option><option>1200</option><option>2400</option><option>4800</option><option>9600</option><option>19200</option><option>38400</option></select></div></div>
+        <label class="lb">Formato (paridade)</label><select id="sc-fmt" class="in"><option value="-1">o da config</option><option value="0">8N1</option><option value="1">8E1</option><option value="2">8O1</option><option value="3">8N2</option></select>
         <div class="g2"><div><label class="lb">Registro inicial</label><input id="sc-ini" class="in" type="number" value="0"></div>
           <div><label class="lb">Quantidade (máx 40)</label><input id="sc-qtd" class="in" type="number" value="20"></div></div>
         <div class="btn-row" style="grid-template-columns:1fr 1fr;margin-top:10px;">
           <button onclick="varrer('regs')">Ler registros</button>
           <button onclick="varrer('ids')">Procurar endereço (1–64)</button>
         </div>
+        <button class="btn-start" style="width:100%;margin-top:10px;" onclick="varrer('auto')">🔎 Busca automática (todas as velocidades e formatos)</button>
         <div id="sc-res" style="margin-top:10px;font-size:13px;"></div>
       </div>
     </div>
@@ -669,7 +673,7 @@ function preencherConfig(){
       <input class="in" id="di-n${i}" value="${esc(x.n)}" maxlength="23">
       <select class="in fsel" id="di-f${i}">${opts(FUNC_DI, x.f)}</select>
       <label class="chk finv" style="margin-top:0;"><input type="checkbox" id="di-i${i}"${x.inv ? ' checked' : ''}> Inverter</label></div>`).join('');
-  $('c-baud').value = String(c.baud || 9600);
+  $('c-baud').value = String(c.baud || 9600); $('c-serFmt').value = c.serFmt || '8N1';
   sensEdit = JSON.parse(JSON.stringify(c.sens || []));
   desenharSensores();
   ['pushUrl','link','tg','ntfy','poUser','poToken'].forEach(n => $('c-' + n).value = a[n] || '');
@@ -733,7 +737,7 @@ function salvarConfig(){
   const nova = {
     nome: $('c-nome').value.trim() || 'Sistema de Recalque',
     di: [...Array(8)].map((_, i) => ({ n: $('di-n' + i).value.trim() || 'Entrada ' + (i+1), f: $('di-f' + i).value, inv: $('di-i' + i).checked })),
-    sens: sensEdit, baud: +$('c-baud').value,
+    sens: sensEdit, baud: +$('c-baud').value, serFmt: $('c-serFmt').value,
     ctrl: { liga: num('c-liga'), desliga: num('c-desliga'), cistMin: num('c-cistMin'), cistVolta: num('c-cistVolta'),
             corrMax: num('c-corrMax') || 0, corrSeco: num('c-corrSeco') || 0, tRetorno: parseInt($('c-tRetorno').value) || 0, buzzer: $('c-buzzer').checked },
     alarmes: { pushUrl: $('c-pushUrl').value.trim(), link: $('c-link').value.trim(), tg: $('c-tg').value.trim(), ligar: $('c-ligar').checked, ntfy: $('c-ntfy').value.trim(),
@@ -761,20 +765,37 @@ function salvarConfig(){
 // ---------------- VARREDURA RS485 ----------------
 function mostrarScan(d){
   const res = $('sc-res');
-  if (!d || !Array.isArray(d.r)) { res.innerHTML = '<span style="color:#f87171">Sem resposta.</span>'; return; }
-  if (d.modo === 'ids') {
-    res.innerHTML = d.r.length ? '<b style="color:#34d399">Responderam: ' + d.r.map(x => 'endereço ' + x.id).join(', ') + '</b>' : '<span style="color:#f87171">Nenhum endereço respondeu. Confira A/B (inverta se precisar), a velocidade e se o aparelho tem RS485.</span>';
+  if (!d || !Array.isArray(d.r)) { res.innerHTML = '<span style="color:#f87171">Sem resposta da placa.</span>'; return; }
+  if (d.modo === 'auto') {
+    const ach = d.r.filter(x => x.id), lixo = d.r.filter(x => x.lixo);
+    if (ach.length) {
+      const x = ach[0];
+      res.innerHTML = `<b style="color:#34d399">✅ O aparelho respondeu! Endereço ${x.id}, ${x.baud} ${x.fmt}${x.exc ? ' (respondeu "registro inválido": a comunicação está OK, falta achar o registro certo)' : ', valor ' + x.v}.</b><br>` +
+        `<button style="margin-top:8px;" onclick="usarSerial(${x.baud},'${x.fmt}',${x.id})">Usar essa velocidade/formato</button>`;
+    } else if (lixo.length) {
+      res.innerHTML = '<b style="color:#fbbf24">⚠ Chegaram dados, mas embaralhados em: ' + lixo.map(x => x.baud + ' ' + x.fmt).join(', ') + '.</b><br>O aparelho está falando, mas não em Modbus RTU nesses formatos (pode ser outro protocolo). Peça ao fornecedor o protocolo de comunicação.';
+    } else {
+      res.innerHTML = '<b style="color:#f87171">❌ Nenhuma resposta em nenhuma velocidade/formato (endereços 1 a 10).</b><br>Confira: fios A/B invertidos, borne certo na placa, e se o indicador tem mesmo o módulo RS485 instalado.';
+    }
     return;
   }
-  const ok = d.r.filter(x => x.v !== null).length;
-  if (!ok) { res.innerHTML = '<span style="color:#f87171">Nenhum registro respondeu nesse endereço/função. Tente a outra função (03/04), outra velocidade ou "Procurar endereço".</span>'; return; }
+  if (d.modo === 'ids') {
+    res.innerHTML = d.r.length ? '<b style="color:#34d399">Responderam: ' + d.r.map(x => 'endereço ' + x.id + (x.exc ? ' (registro inválido, mas comunicou)' : '')).join(', ') + '</b>' : '<span style="color:#f87171">Nenhum endereço respondeu. Inverta A/B, teste outra velocidade ou use a Busca automática.</span>';
+    return;
+  }
+  const ok = d.r.filter(x => x.v !== null).length, exc = d.r.filter(x => x.exc).length;
+  if (!ok) { res.innerHTML = exc ? '<span style="color:#fbbf24">O aparelho respondeu "registro inválido" para todos. A comunicação está OK: tente a outra função (03/04) ou outro registro inicial (ex.: 100, 1000, 4096).</span>' : '<span style="color:#f87171">Nenhum registro respondeu. Tente a outra função (03/04) ou a Busca automática.</span>'; return; }
   res.innerHTML = '<table style="width:100%;border-collapse:collapse;font-family:monospace;"><tr style="color:var(--muted)"><td>Registro</td><td>Valor</td><td>Com sinal</td></tr>' +
-    d.r.map(x => x.v === null ? `<tr><td>${x.reg}</td><td colspan="2" style="color:#64748b">—</td></tr>` :
+    d.r.map(x => x.v === null ? `<tr><td>${x.reg}</td><td colspan="2" style="color:#64748b">${x.exc ? 'inválido' : '—'}</td></tr>` :
       `<tr><td>${x.reg}</td><td style="color:#38bdf8">${x.v}</td><td>${x.v > 32767 ? x.v - 65536 : x.v}</td></tr>`).join('') + '</table>';
 }
+function usarSerial(baud, fmt, id){
+  $('c-baud').value = String(baud); $('c-serFmt').value = fmt; $('sc-id').value = id; $('sc-baud').value = '0'; $('sc-fmt').value = '-1';
+  $('c-msg').style.color = '#fbbf24'; $('c-msg').innerText = 'Velocidade e formato preenchidos. Toque em Salvar e depois use "Ler registros".';
+}
 function varrer(modo){
-  const q = { modo, id: +$('sc-id').value || 1, fc: +$('sc-fc').value, ini: +$('sc-ini').value || 0, qtd: +$('sc-qtd').value || 20, baud: +$('sc-baud').value || 0 };
-  $('sc-res').innerHTML = '<span style="color:#fbbf24">Lendo... ' + (modo === 'ids' ? '(até 15 s)' : '') + '</span>';
+  const q = { modo, id: +$('sc-id').value || 1, fc: +$('sc-fc').value, ini: +$('sc-ini').value || 0, qtd: +$('sc-qtd').value || 20, baud: +$('sc-baud').value || 0, fmt: +$('sc-fmt').value };
+  $('sc-res').innerHTML = '<span style="color:#fbbf24">Lendo... ' + (modo === 'ids' ? '(até 15 s)' : modo === 'auto' ? '(até 40 s, aguarde)' : '') + '</span>';
   if (LOCAL) { fetch('/api/scan?' + new URLSearchParams(q)).then(r => r.json()).then(mostrarScan).catch(() => mostrarScan(null)); return; }
   if (!cli || !cli.connected) { mostrarScan(null); return; }
   cli.publish(base + '/cmd/scan', JSON.stringify(q), { qos: 1 });
